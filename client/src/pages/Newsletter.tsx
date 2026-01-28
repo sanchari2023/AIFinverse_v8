@@ -11,10 +11,13 @@ import {
 } from "lucide-react";
 import { api } from "@/services/api";
 
+
+const ARTICLE_INDIA = "india-markets";
+const ARTICLE_GAS = "widowmaker";
 const ARTICLE_YEAR = "year-review";
 const ARTICLE_ALT = "altseason";
-const ARTICLE_GAS = "widowmaker";  // Natural Gas article
-const ARTICLE_INDIA = "india-markets";  // Market Insight article
+  // Natural Gas article
+  // Market Insight article
 
 export default function Newsletter() {
   const [email, setEmail] = useState("");
@@ -83,16 +86,16 @@ export default function Newsletter() {
       
       // Then, expand ONLY the requested article
       if (article === "india-markets") {
-        console.log("Expanding Article 4 (India Markets)");
+        console.log("Expanding Article 1 (India Markets)");
         setExpandedArticle4(true);
       } else if (article === "widowmaker") {
-        console.log("Expanding Article 3 (Widowmaker)");
+        console.log("Expanding Article 2 (Widowmaker)");
         setExpandedArticle3(true);
       } else if (article === "year-review") {
-        console.log("Expanding Article 1 (Year Review)");
+        console.log("Expanding Article 3 (Year Review)");
         setExpandedArticle1(true);
       } else if (article === "altseason") {
-        console.log("Expanding Article 2 (Altseason)");
+        console.log("Expanding Article 4 (Altseason)");
         setExpandedArticle2(true);
       } else {
         console.warn("Unknown article ID:", article);
@@ -265,7 +268,7 @@ export default function Newsletter() {
           )}
 
           {/* ARTICLE 1 - INDIA MARKETS */}
-          {/* Always show this article, but conditionally expand it */}
+          
           <section id="india-markets" className="mb-16">
             <div className="p-6 bg-slate-800/60 border border-slate-700/50 rounded-xl backdrop-blur-sm">
               <div className="flex items-center gap-4 text-sm text-gray-400 mb-6 flex-wrap border-b border-slate-700/50 pb-4">
@@ -283,6 +286,75 @@ export default function Newsletter() {
                 </span>
                 <span className="ml-auto flex items-center gap-2">
                   
+                {/* Share Button */}
+                  <div className="relative">
+                    <button 
+                      onClick={(e) => handleShareClick("india-markets", e)}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 rounded-lg text-gray-300 text-xs transition-all duration-200"
+                    >
+                      <Share2 size={12} />
+                      Share
+                    </button>
+                    
+                    {/* Share Options Panel */}
+                    {showShare === "india-markets" && (
+                      <div 
+                        className="absolute right-0 top-8 z-50"
+                        onClick={handleShareOptionClick}
+                      >
+                        <div className="bg-slate-900 border border-slate-700 rounded-lg p-2 shadow-xl min-w-[140px]">
+                          <h4 className="text-white font-semibold text-xs mb-2">Share Article</h4>
+                          
+                          <div className="space-y-1">
+                            <a
+                              href={getShareLinks("india-markets").whatsapp}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={handleShareOptionClick}
+                              className="flex items-center gap-2 px-2 py-1.5 bg-emerald-900/20 border border-emerald-800/30 rounded text-emerald-300 text-xs hover:bg-emerald-900/30 transition-colors"
+                            >
+                              <img src="/images/whatsapp.png" alt="WhatsApp" className="w-3 h-3" />
+                              WhatsApp
+                            </a>
+
+                            <a
+                              href={getShareLinks("india-markets").telegram}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={handleShareOptionClick}
+                              className="flex items-center gap-2 px-2 py-1.5 bg-sky-900/20 border border-sky-800/30 rounded text-sky-300 text-xs hover:bg-sky-900/30 transition-colors"
+                            >
+                              <img src="/images/telegram.png" alt="Telegram" className="w-3 h-3" />
+                              Telegram
+                            </a>
+
+                            <a
+                              href={getShareLinks("india-markets").linkedin}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={handleShareOptionClick}
+                              className="flex items-center gap-2 px-2 py-1.5 bg-blue-900/20 border border-blue-800/30 rounded text-blue-300 text-xs hover:bg-blue-900/30 transition-colors"
+                            >
+                              <img src="/images/linkedin.png" alt="LinkedIn" className="w-3 h-3" />
+                              LinkedIn
+                            </a>
+
+                            <button
+                              onClick={(e) => {
+                                handleShareOptionClick(e);
+                                navigator.clipboard.writeText(getShareLinks("india-markets").copy);
+                                setShowShare(null);
+                              }}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 bg-slate-700/30 border border-slate-600/30 rounded text-gray-300 text-xs hover:bg-slate-700/40 transition-colors"
+                            >
+                              <Copy size={12} />
+                              Copy Link
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </span>
               </div>
               
@@ -414,10 +486,10 @@ export default function Newsletter() {
 
                   {/* Show Read More/Less button */}
                   <button
-                    onClick={() => setExpandedArticle4(!expandedArticle4)}
+                    onClick={() => setExpandedArticle1(!expandedArticle1)}
                     className="mt-8 px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-purple-400 font-medium transition-all duration-200 flex items-center gap-2 group"
                   >
-                    {expandedArticle4 ? (
+                    {expandedArticle1 ? (
                       <>
                         <span>Read Less</span>
                         <span className="group-hover:-translate-y-0.5 transition-transform">↑</span>
@@ -452,6 +524,75 @@ export default function Newsletter() {
                 </span>
                 <span className="ml-auto flex items-center gap-2">
                   
+               {/* Share Button */}
+                  <div className="relative">
+                    <button 
+                      onClick={(e) => handleShareClick("widowmaker", e)}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 rounded-lg text-gray-300 text-xs transition-all duration-200"
+                    >
+                      <Share2 size={12} />
+                      Share
+                    </button>
+                    
+                    {/* Share Options Panel */}
+                    {showShare === "widowmaker" && (
+                      <div 
+                        className="absolute right-0 top-8 z-50"
+                        onClick={handleShareOptionClick}
+                      >
+                        <div className="bg-slate-900 border border-slate-700 rounded-lg p-2 shadow-xl min-w-[140px]">
+                          <h4 className="text-white font-semibold text-xs mb-2">Share Article</h4>
+                          
+                          <div className="space-y-1">
+                            <a
+                              href={getShareLinks("widowmaker").whatsapp}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={handleShareOptionClick}
+                              className="flex items-center gap-2 px-2 py-1.5 bg-emerald-900/20 border border-emerald-800/30 rounded text-emerald-300 text-xs hover:bg-emerald-900/30 transition-colors"
+                            >
+                              <img src="/images/whatsapp.png" alt="WhatsApp" className="w-3 h-3" />
+                              WhatsApp
+                            </a>
+
+                            <a
+                              href={getShareLinks("widowmaker").telegram}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={handleShareOptionClick}
+                              className="flex items-center gap-2 px-2 py-1.5 bg-sky-900/20 border border-sky-800/30 rounded text-sky-300 text-xs hover:bg-sky-900/30 transition-colors"
+                            >
+                              <img src="/images/telegram.png" alt="Telegram" className="w-3 h-3" />
+                              Telegram
+                            </a>
+
+                            <a
+                              href={getShareLinks("widowmaker").linkedin}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={handleShareOptionClick}
+                              className="flex items-center gap-2 px-2 py-1.5 bg-blue-900/20 border border-blue-800/30 rounded text-blue-300 text-xs hover:bg-blue-900/30 transition-colors"
+                            >
+                              <img src="/images/linkedin.png" alt="LinkedIn" className="w-3 h-3" />
+                              LinkedIn
+                            </a>
+
+                            <button
+                              onClick={(e) => {
+                                handleShareOptionClick(e);
+                                navigator.clipboard.writeText(getShareLinks("widowmaker").copy);
+                                setShowShare(null);
+                              }}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 bg-slate-700/30 border border-slate-600/30 rounded text-gray-300 text-xs hover:bg-slate-700/40 transition-colors"
+                            >
+                              <Copy size={12} />
+                              Copy Link
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </span>
               </div>
               
@@ -469,7 +610,7 @@ export default function Newsletter() {
                     </p>
                   </div>
 
-                  {expandedArticle3 && (
+                  {expandedArticle2 && (
                     <div className="mt-8 text-gray-300 text-sm leading-relaxed space-y-8">
                       <div className="space-y-4">
                         <p className="leading-relaxed">
@@ -543,10 +684,10 @@ export default function Newsletter() {
 
                   {/* Show Read More/Less button */}
                   <button
-                    onClick={() => setExpandedArticle3(!expandedArticle3)}
+                    onClick={() => setExpandedArticle2(!expandedArticle2)}
                     className="mt-8 px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-red-400 font-medium transition-all duration-200 flex items-center gap-2 group"
                   >
-                    {expandedArticle3 ? (
+                    {expandedArticle2 ? (
                       <>
                         <span>Read Less</span>
                         <span className="group-hover:-translate-y-0.5 transition-transform">↑</span>
@@ -666,7 +807,7 @@ export default function Newsletter() {
                     </p>
                   </div>
 
-                  {expandedArticle1 && (
+                  {expandedArticle3 && (
                     <div className="mt-8 text-gray-300 text-base leading-relaxed space-y-8">
                       {/* FULL ARTICLE CONTENT */}
                       <div className="space-y-4">
@@ -880,10 +1021,10 @@ export default function Newsletter() {
 
                   {/* Show Read More/Less button */}
                   <button
-                    onClick={() => setExpandedArticle1(!expandedArticle1)}
+                    onClick={() => setExpandedArticle3(!expandedArticle3)}
                     className="mt-8 px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-amber-400 font-medium transition-all duration-200 flex items-center gap-2 group"
                   >
-                    {expandedArticle1 ? (
+                    {expandedArticle3 ? (
                       <>
                         <span>Read Less</span>
                         <span className="group-hover:-translate-y-0.5 transition-transform">↑</span>
@@ -1003,7 +1144,7 @@ export default function Newsletter() {
                     </p>
                   </div>
 
-                  {expandedArticle2 && (
+                  {expandedArticle4 && (
                     <div className="mt-8 text-gray-300 text-base leading-relaxed space-y-8">
                 
                       {/* FULL ARTICLE CONTENT */}
@@ -1287,10 +1428,10 @@ export default function Newsletter() {
 
                   {/* Show Read More/Less button */}
                   <button
-                    onClick={() => setExpandedArticle2(!expandedArticle2)}
+                    onClick={() => setExpandedArticle4(!expandedArticle4)}
                     className="mt-8 px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-cyan-400 font-medium transition-all duration-200 flex items-center gap-2 group"
                   >
-                    {expandedArticle2 ? (
+                    {expandedArticle4 ? (
                       <>
                         <span>Read Less</span>
                         <span className="group-hover:-translate-y-0.5 transition-transform">↑</span>

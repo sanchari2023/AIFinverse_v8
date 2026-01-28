@@ -411,7 +411,7 @@ const loadUserProfile = async () => {
                       <CardTitle className="flex items-center gap-2">
                         <ShieldCheck className="w-5 h-5 text-cyan-400" /> Account Profile
                       </CardTitle>
-                      <CardDescription>Data loaded from encrypted S3 storage</CardDescription>
+                      <CardDescription></CardDescription>
                     </div>
                     <Button variant="outline" size="sm" onClick={loadUserProfile} className="border-slate-700 text-slate-400">
                       <RefreshCw className="w-4 h-4 mr-2" /> {new Date(lastUpdateTime).toLocaleTimeString()}
@@ -593,7 +593,7 @@ const loadUserProfile = async () => {
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
                               <Building2 className="w-4 h-4 text-cyan-400" />
-                              <span className="font-medium">🇮🇳 India Market</span>
+                              <span className="font-medium">🇮🇳 India </span>
                             </div>
                             <span className={`px-2 py-1 text-xs rounded-full ${userProfile.marketPreferences.India.is_active ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'}`}>
                               {userProfile.marketPreferences.India.is_active ? 'Active' : 'Inactive'}
@@ -620,7 +620,7 @@ const loadUserProfile = async () => {
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
                               <Building2 className="w-4 h-4 text-cyan-400" />
-                              <span className="font-medium">🇺🇸 US Market</span>
+                              <span className="font-medium">🇺🇸 US</span>
                             </div>
                             <span className={`px-2 py-1 text-xs rounded-full ${userProfile.marketPreferences.US.is_active ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'}`}>
                               {userProfile.marketPreferences.US.is_active ? 'Active' : 'Inactive'}

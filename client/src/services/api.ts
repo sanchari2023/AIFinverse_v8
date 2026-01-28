@@ -3,7 +3,7 @@ import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosE
 
 // Use proxy in development, direct URL in production
 const API_BASE_URL = import.meta.env.DEV
-  ? "api"
+  ? "https://api.aifinverse.com"
   : "https://api.aifinverse.com";
 
 // Main API instance (for JSON requests)
