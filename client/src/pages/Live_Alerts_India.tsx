@@ -56,7 +56,7 @@ export default function Live_Alerts_India() {
     },
     {
       stock: "HDFCBANK", 
-      type: "Contrabets",
+      type: "Double Top - Double Bottom (Contrabets)",
       price: "1,725.30",
       change: "-0.34%",
       rsi: "35.2",
@@ -68,7 +68,7 @@ export default function Live_Alerts_India() {
     },
     {
       stock: "ITC", 
-      type: "Contrabets",
+      type: "Topping Candle - Bottoming Candle (Contrabets)",
       price: "2,845.50",
       change: "-0.85%",
       rsi: "28.7",

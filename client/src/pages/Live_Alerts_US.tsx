@@ -70,7 +70,7 @@ export default function Live_Alerts_US() {
     },
     { 
       stock: "TSLA", 
-      type: "Contrabets",
+      type: "Double Top - Double Bottom (Contrabets)",
       price: "$245.30",
       change: "-2.14%",
       rsi: "34.82",
@@ -82,7 +82,7 @@ export default function Live_Alerts_US() {
     },
     { 
       stock: "NVDA", 
-      type: "Contrabets",
+      type: "Topping Candle - Bottoming Candle (Contrabets)",
       price: "$945.25",
       change: "+1.85%",
       rsi: "68.45",
