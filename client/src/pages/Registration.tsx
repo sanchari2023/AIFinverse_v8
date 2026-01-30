@@ -752,6 +752,45 @@ const Registration = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
       <Navbar />
 
+  
+  {/* ================= FLOATING STRATEGY DESCRIPTION PANEL ================= */}
+  {market && hoveredStrategy && (
+    <div className="fixed right-8 top-1/2 transform -translate-y-1/2 z-40 w-96">
+      <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-cyan-500/40 rounded-xl p-6 shadow-2xl">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-cyan-400 font-bold text-sm">{hoveredStrategy}</h4>
+            <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
+              strategies.includes(hoveredStrategy) 
+                ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                : 'bg-slate-700/50 text-slate-400 border border-slate-600'
+            }`}>
+              {strategies.includes(hoveredStrategy) ? 'SELECTED' : 'NOT SELECTED'}
+            </div>
+          </div>
+          
+          {strategyInfo[hoveredStrategy]?.description && (
+            <div>
+              <p className="text-xs font-semibold text-cyan-300 uppercase mb-2 tracking-wide">Description</p>
+              <p className="text-sm text-slate-300 leading-relaxed bg-slate-800/30 p-3 rounded-lg">
+                {strategyInfo[hoveredStrategy].description}
+              </p>
+            </div>
+          )}
+
+          {strategyInfo[hoveredStrategy]?.frequency && (
+            <div className="pt-3">
+              <p className="text-xs font-semibold text-emerald-300 uppercase mb-2 tracking-wide">Frequency</p>
+              <p className="text-sm text-slate-300 bg-slate-800/30 p-3 rounded-lg">
+                {strategyInfo[hoveredStrategy].frequency}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )}
+
       {/* ================= TERMS & CONDITIONS MODAL ================= */}
       {showTermsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/95 backdrop-blur-sm">
@@ -998,7 +1037,7 @@ const Registration = () => {
 
               <div className="country-input-container relative">
                 <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Country *
+                  Country of Residence *
                 </label>
                 <div className="relative">
                   {/* Show selected country's flag if available */}
@@ -1184,146 +1223,99 @@ const Registration = () => {
               </div>
 
               {/* Alert Stratege Selection */}
-              {market && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-white">
-                      Choose Alert Types <span className="text-red-400">*</span>
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={handleSelectAll}
-                      className="text-sm text-cyan-400 hover:text-cyan-300 transition"
-                    >
-                      {isAllSelected ? "Deselect All" : "Select All"}
-                    </button>
-                  </div>
-                  
-                  <p className="text-slate-400 text-sm">
-                    Select alert types you want to receive for {market} market
-                  </p>
-
-                  <div className="space-y-3">
-                    {alertTypes.map((type) => (
-                      <div
-                        key={type}
-                        className="relative"
-                        onMouseEnter={() => handleStrategyMouseEnter(type)}
-                        onMouseLeave={handleStrategyMouseLeave}
-                      >
-                        <div
-                          onClick={() => toggleStrategy(type)}
-                          className={`p-4 rounded-xl border cursor-pointer transition-all duration-300 flex items-center space-x-4 ${
-                            strategies.includes(type)
-                              ? "border-cyan-500 bg-cyan-500/10"
-                              : "border-slate-700 bg-slate-900/50 hover:bg-slate-800/50"
-                          }`}
-                        >
-                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                            strategies.includes(type)
-                              ? "border-cyan-500 bg-cyan-500"
-                              : "border-slate-500"
-                          }`}>
-                            {strategies.includes(type) && (
-                              <div className="w-2 h-2 bg-white rounded-sm" />
-                            )}
-                          </div>
-                          <div className="flex-1 flex items-center justify-between">
-                            <span className={`font-medium ${
-                              strategies.includes(type) ? "text-cyan-300" : "text-slate-300"
-                            }`}>
-                              {type}
-                            </span>
-                            
-                            {/* Strategy Info Message - Shows beside strategy name */}
-                           {hoveredStrategy === type && (
-  <div 
-    className="ml-4 p-4 bg-slate-800/95 border border-cyan-500/40 rounded-xl animate-in fade-in slide-in-from-right-2 duration-200 flex-shrink-0 max-w-xs shadow-xl"
-    onMouseEnter={() => setHoveredStrategy(type)}
-    onMouseLeave={handleStrategyMouseLeave}
-  >
-    <div className="space-y-3">
-      {/* Only show Description section if description exists */}
-      {strategyInfo[type]?.description?.trim() && (
-        <div>
-          <div className="flex items-center space-x-2 mb-2">
-            <div className="w-2 h-2 bg-cyan-500 rounded-full"></div>
-            <p className="text-xs font-semibold text-cyan-300 uppercase tracking-wide">
-              Description
-            </p>
-          </div>
-          <p className="text-xs text-slate-300 leading-relaxed">
-            {strategyInfo[type]?.description}
-          </p>
-        </div>
-      )}
-      
-      {/* Only show divider if BOTH description and frequency exist */}
-      {strategyInfo[type]?.description?.trim() && 
-       strategyInfo[type]?.frequency?.trim() && (
-        <div className="border-t border-slate-700/50"></div>
-      )}
-      
-      {/* Only show Frequency section if frequency exists */}
-      {strategyInfo[type]?.frequency?.trim() && (
-        <div>
-          <div className="flex items-center space-x-2 mb-2">
-            <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-            <p className="text-xs font-semibold text-emerald-300 uppercase tracking-wide">
-              Frequency
-            </p>
-          </div>
-          <p className="text-xs text-slate-300 leading-relaxed">
-            {strategyInfo[type]?.frequency}
-          </p>
-        </div>
-       )}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+              {/* Alert Strategy Selection */}
+{market && (
+  <div className="space-y-4">
+    <div className="flex items-center justify-between">
+      <h3 className="text-lg font-semibold text-white">
+        Choose Alert Types <span className="text-red-400">*</span>
+      </h3>
+      <button
+        type="button"
+        onClick={handleSelectAll}
+        className="text-sm text-cyan-400 hover:text-cyan-300 transition"
+      >
+        {isAllSelected ? "Deselect All" : "Select All"}
+      </button>
     </div>
-  ))}
-</div>
-              
-                  {/* Selected Summary */}
-                  {strategies.length > 0 && (
-                    <div className="text-center py-3 bg-slate-900/30 rounded-xl">
-                      <p className="text-cyan-400 font-medium">
-                        {strategies.length} alert type(s) selected for {market} market
-                      </p>
-                    </div>
-                  )}
+    
+    <p className="text-slate-400 text-sm">
+      Select alert types you want to receive for {market} market
+    </p>
 
-                  {/* Action Buttons */}
-                  <div className="space-y-3 pt-4">
-                    <Button
-                      onClick={handleCompleteRegistrationClick}
-                      disabled={isSubmitting || strategies.length === 0}
-                      className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold py-3 rounded-xl hover:from-green-600 hover:to-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:-translate-y-0.5 active:translate-y-0"
-                    >
-                      {isSubmitting ? (
-                        <span className="flex items-center justify-center">
-                          <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                          Processing...
-                        </span>
-                      ) : (
-                        "Complete Registration"
-                      )}
-                    </Button>
-
-                    <Button
-                      onClick={handleBack}
-                      variant="outline"
-                      className="w-full border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white py-3 rounded-xl transition"
-                    >
-                      Back to Account Details
-                    </Button>
-                  </div>
-                </div>
+    <div className="space-y-3">
+      {alertTypes.map((type) => (
+        <div
+          key={type}
+          className="relative"
+          onMouseEnter={() => setHoveredStrategy(type)}
+          onMouseLeave={() => setHoveredStrategy(null)}
+        >
+          <div
+            onClick={() => toggleStrategy(type)}
+            className={`p-4 rounded-xl border cursor-pointer transition-all duration-300 flex items-center space-x-4 ${
+              strategies.includes(type)
+                ? "border-cyan-500 bg-cyan-500/10"
+                : "border-slate-700 bg-slate-900/50 hover:bg-slate-800/50"
+            }`}
+          >
+            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+              strategies.includes(type)
+                ? "border-cyan-500 bg-cyan-500"
+                : "border-slate-500"
+            }`}>
+              {strategies.includes(type) && (
+                <div className="w-2 h-2 bg-white rounded-sm" />
               )}
+            </div>
+            <div className="flex-1">
+              <span className={`font-medium ${
+                strategies.includes(type) ? "text-cyan-300" : "text-slate-300"
+              }`}>
+                {type}
+              </span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+    
+    {/* Selected Summary */}
+    {strategies.length > 0 && (
+      <div className="text-center py-3 bg-slate-900/30 rounded-xl">
+        <p className="text-cyan-400 font-medium">
+          {strategies.length} alert type(s) selected for {market} market
+        </p>
+      </div>
+    )}
 
+    {/* Action Buttons */}
+    <div className="space-y-3 pt-4">
+      <Button
+        onClick={handleCompleteRegistrationClick}
+        disabled={isSubmitting || strategies.length === 0}
+        className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold py-3 rounded-xl hover:from-green-600 hover:to-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:-translate-y-0.5 active:translate-y-0"
+      >
+        {isSubmitting ? (
+          <span className="flex items-center justify-center">
+            <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+            Processing...
+          </span>
+        ) : (
+          "Complete Registration"
+        )}
+      </Button>
+
+      <Button
+        onClick={handleBack}
+        variant="outline"
+        className="w-full border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white py-3 rounded-xl transition"
+      >
+        Back to Account Details
+      </Button>
+    </div>
+  </div>
+)}
               {/* Prompt to select market */}
               {!market && (
                 <div className="text-center py-8">

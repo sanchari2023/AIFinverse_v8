@@ -193,12 +193,7 @@ export default function Home() {
                 "s": "FOREXCOM:SPXUSD",
                 "d": "S&P 500 Index"
               },
-              {
-                "s": "NASDAQ:NDX",
-                "d": "",
-                "logoid": "indices/nasdaq-100",
-                "currency-logoid": "country/US"
-              },
+              
               {
                 "s": "INDEX:NKY",
                 "d": "",
