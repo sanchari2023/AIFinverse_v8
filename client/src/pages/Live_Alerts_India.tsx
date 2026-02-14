@@ -1849,14 +1849,9 @@ export default function Live_Alerts_India() {
                   </div>
                   <p className="text-slate-400 mb-2">No alerts for your watchlist</p>
                   <p className="text-sm text-slate-500">
-                    Check back later or try refreshing
+                    Create watchlist to get personalised alerts
                   </p>
-                  <Button
-                    onClick={handleRefresh}
-                    className="mt-4 bg-slate-700 hover:bg-slate-600 text-white text-sm px-4 py-2 rounded-lg"
-                  >
-                    ↻ Refresh
-                  </Button>
+                  
                 </div>
               ) : (
                 <div className="space-y-4">
