@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import Navbar from "@/components/Navbar";
 import { useLocation } from "wouter";
 import { api } from "@/services/api";
 import { CheckCircle, X, AlertCircle } from "lucide-react";
 
+
 const alertTypes = [
   "Momentum Riders (52-week High/Low, All-Time High/Low)",
   "Cycle Count Reversal",
-  "Double Top - Double Bottom (Contrabets)",
+  "Swing Trade",
   "Topping Candle - Bottoming Candle (Contrabets)",
   "Mean Reversion",
   "Pattern Formation",
@@ -24,7 +25,7 @@ const strategyInfo: Record<string, { description?: string; frequency?: string }>
     description: "These will be high probability set ups, have to meet a confluence of factors to reach the trigger status. Based on 10 year back testing.",
     frequency: " Expect less frequent alerts, but with suggestive targets, for both long and short side."
   },
-  "Double Top - Double Bottom (Contrabets)": {
+  "Swing Trade": {
     description: " Retesting price levels (Technical levels) which lead to short term reversals before next moves. Would also cover intermittent tops and bottoms that become good trading ranges in periods of consolidation. Would suggest levels and targets based on stock history.",
     frequency: "In trending markets, frequency will be high."
   },
@@ -171,6 +172,31 @@ const Registration = () => {
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [hasAgreedToTerms, setHasAgreedToTerms] = useState(false);
   const [termsError, setTermsError] = useState("");
+
+
+  // Add these to your existing state declarations
+const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
+const [scrollPercentage, setScrollPercentage] = useState(0);
+const termsContentRef = useRef<HTMLDivElement>(null);
+
+// Add this scroll handler function
+const handleTermsScroll = () => {
+  const element = termsContentRef.current;
+  if (element) {
+    const scrollTop = element.scrollTop;
+    const scrollHeight = element.scrollHeight;
+    const clientHeight = element.clientHeight;
+    
+    // Calculate scroll percentage
+    const percentage = (scrollTop / (scrollHeight - clientHeight)) * 100;
+    setScrollPercentage(percentage);
+    
+    // Enable checkbox when scrolled to bottom (with 95% threshold)
+    if (percentage >= 95) {
+      setHasScrolledToBottom(true);
+    }
+  }
+};
 
   // Debug state changes
   useEffect(() => {
@@ -753,14 +779,29 @@ const Registration = () => {
       <Navbar />
 
   
-  {/* ================= FLOATING STRATEGY DESCRIPTION PANEL ================= */}
-  {market && hoveredStrategy && (
-    <div className="fixed right-8 top-1/2 transform -translate-y-1/2 z-40 w-96">
-      <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-cyan-500/40 rounded-xl p-6 shadow-2xl">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h4 className="text-cyan-400 font-bold text-sm">{hoveredStrategy}</h4>
-            <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
+ {/* ================= FLOATING STRATEGY DESCRIPTION PANEL ================= */}
+{market && hoveredStrategy && (
+  <div className="fixed right-8 top-1/2 transform -translate-y-1/2 z-40 w-96">
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-cyan-500/40 rounded-xl p-6 shadow-2xl">
+      <div className="space-y-4">
+        <div className="flex items-start justify-between">
+          <h4 className="text-cyan-400 font-bold text-xs flex-1 mr-2">{hoveredStrategy}</h4>
+          <div className="flex items-center space-x-2 flex-shrink-0">
+            {/* LIVE or COMING SOON indicator */}
+            {(hoveredStrategy === "Momentum Riders (52-week High/Low, All-Time High/Low)" || 
+              hoveredStrategy === "Cycle Count Reversal" || 
+              hoveredStrategy === "Swing Trade") ? (
+              <div className="flex items-center space-x-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0"></div>
+                <span className="text-[10px] font-semibold text-red-400 whitespace-nowrap">LIVE</span>
+              </div>
+            ) : (
+              <div className="flex items-center">
+                <span className="text-[10px] font-semibold text-amber-400 whitespace-nowrap">COMING SOON</span>
+              </div>
+            )}
+            
+            <div className={`px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${
               strategies.includes(hoveredStrategy) 
                 ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
                 : 'bg-slate-700/50 text-slate-400 border border-slate-600'
@@ -768,133 +809,204 @@ const Registration = () => {
               {strategies.includes(hoveredStrategy) ? 'SELECTED' : 'NOT SELECTED'}
             </div>
           </div>
-          
-          {strategyInfo[hoveredStrategy]?.description && (
-            <div>
-              <p className="text-xs font-semibold text-cyan-300 uppercase mb-2 tracking-wide">Description</p>
-              <p className="text-sm text-slate-300 leading-relaxed bg-slate-800/30 p-3 rounded-lg">
-                {strategyInfo[hoveredStrategy].description}
-              </p>
-            </div>
-          )}
-
-          {strategyInfo[hoveredStrategy]?.frequency && (
-            <div className="pt-3">
-              <p className="text-xs font-semibold text-emerald-300 uppercase mb-2 tracking-wide">Frequency</p>
-              <p className="text-sm text-slate-300 bg-slate-800/30 p-3 rounded-lg">
-                {strategyInfo[hoveredStrategy].frequency}
-              </p>
-            </div>
-          )}
         </div>
+        
+        {strategyInfo[hoveredStrategy]?.description && (
+          <div>
+            <p className="text-[10px] font-semibold text-cyan-300 uppercase mb-1 tracking-wide">Description</p>
+            <p className="text-xs text-slate-300 leading-relaxed bg-slate-800/30 p-3 rounded-lg">
+              {strategyInfo[hoveredStrategy].description}
+            </p>
+          </div>
+        )}
+
+        {strategyInfo[hoveredStrategy]?.frequency && (
+          <div className="pt-3">
+            <p className="text-[10px] font-semibold text-emerald-300 uppercase mb-1 tracking-wide">Frequency</p>
+            <p className="text-xs text-slate-300 bg-slate-800/30 p-3 rounded-lg">
+              {strategyInfo[hoveredStrategy].frequency}
+            </p>
+          </div>
+        )}
       </div>
     </div>
-  )}
+  </div>
+)}
+
 
       {/* ================= TERMS & CONDITIONS MODAL ================= */}
-      {showTermsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/95 backdrop-blur-sm">
-          <div className="w-full max-w-4xl max-h-[90vh] bg-gradient-to-br from-slate-800 to-slate-900 border border-cyan-500/40 rounded-2xl p-6 shadow-2xl mx-4 flex flex-col">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-700">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-r from-red-500 to-red-500 flex items-center justify-center">
-                  <AlertCircle className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-white">Terms & Conditions  -  AIFinverse</h2>
-                  
-                </div>
-              </div>
-              <button
-                onClick={handleDisagreeToTerms}
-                className="p-2 hover:bg-slate-700 rounded-lg transition"
-              >
-                <X className="w-5 h-5 text-slate-400" />
-              </button>
-            </div>
-
-            {/* Terms Content */}
-            <div className="flex-1 overflow-y-auto pr-2 mb-4">
-              <div className="space-y-4">
-                
-                  <div className="flex items-center space-x-2 mb-2">
-                   
-                    
-                  
-                  
-                </div>
-
-                {termsAndConditions.map((term, index) => (
-                  <div key={index} className="bg-slate-800/30 rounded-xl p-4">
-                    <h3 className="text-lg font-semibold text-cyan-300 mb-2">{term.title}</h3>
-                    <p className="text-slate-300 text-sm whitespace-pre-line">{term.content}</p>
-                  </div>
-                ))}
-
-                {/* Agreement Checkbox */}
-                <div className="sticky bottom-0 bg-slate-800/90 backdrop-blur-sm p-4 rounded-xl border border-slate-700 mt-4">
-                  <div className="flex items-start space-x-3">
-                    <div className="flex items-center h-6">
-                      <input
-                        type="checkbox"
-                        id="agree-terms"
-                        checked={hasAgreedToTerms}
-                        onChange={(e) => {
-                          setHasAgreedToTerms(e.target.checked);
-                          setTermsError("");
-                        }}
-                        className="w-5 h-5 rounded border-2 border-slate-600 bg-slate-800 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <label htmlFor="agree-terms" className="text-white font-medium cursor-pointer">
-                        I have read, understood, and agree to all terms & conditions
-                      </label>
-                      <p className="text-slate-400 text-sm mt-1">
-                        You must check this box to complete your registration
-                      </p>
-                      {termsError && (
-                        <p className="text-red-400 text-sm mt-2">{termsError}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer - Action Buttons */}
-            <div className="flex space-x-3 pt-4 border-t border-slate-700">
-              <Button
-                onClick={handleDisagreeToTerms}
-                variant="outline"
-                className="flex-1 bg-gradient-to-r from-blue-500 to-teal-500 text-white font-semibold py-3 hover:from-blue-600 hover:to-teal-600 disabled:opacity-50"
-              >
-                I Disagree - Cancel Registration
-              </Button>
-              <Button
-                onClick={handleAgreeToTerms}
-                disabled={isSubmitting}
-                className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold py-3 hover:from-green-600 hover:to-emerald-600 disabled:opacity-50"
-              >
-                {isSubmitting ? (
-                  <span className="flex items-center justify-center">
-                    <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                    Processing...
-                  </span>
-                ) : (
-                  "I Agree - Complete Registration"
-                )}
-              </Button>
-            </div>
+      
+{showTermsModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/95 backdrop-blur-sm">
+    <div className="w-full max-w-4xl max-h-[90vh] bg-gradient-to-br from-slate-800 to-slate-900 border border-cyan-500/40 rounded-2xl p-6 shadow-2xl mx-4 flex flex-col">
+      {/* Modal Header */}
+      <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-700">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-red-500 to-red-500 flex items-center justify-center">
+            <AlertCircle className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-white">Terms & Conditions - AIFinverse</h2>
+            
           </div>
         </div>
-      )}
+        <button
+          onClick={handleDisagreeToTerms}
+          className="p-2 hover:bg-slate-700 rounded-lg transition"
+          disabled={isSubmitting}
+        >
+          <X className="w-5 h-5 text-slate-400" />
+        </button>
+      </div>
+
+      {/* Terms Content - Scrollable */}
+      <div 
+        ref={termsContentRef}
+        className="flex-1 overflow-y-auto pr-2 mb-4"
+        onScroll={handleTermsScroll}
+      >
+        <div className="space-y-4">
+          <div className="mb-6 p-4 bg-slate-800/40 rounded-xl border border-slate-700">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center">
+                <span className="text-amber-400 text-lg">📜</span>
+              </div>
+              <div>
+                <h3 className="text-white font-medium">Important Notice</h3>
+                <p className="text-slate-400 text-sm mt-1">
+                  Please scroll through and read all terms & conditions below. 
+                  The agreement checkbox will be enabled only after you've read everything.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {termsAndConditions.map((term, index) => (
+            <div key={index} className="bg-slate-800/30 rounded-xl p-4">
+              <h3 className="text-lg font-semibold text-cyan-300 mb-2">{term.title}</h3>
+              <p className="text-slate-300 text-sm whitespace-pre-line">{term.content}</p>
+            </div>
+          ))}
+
+          {/* Scroll Indicator */}
+          {!hasScrolledToBottom && (
+            <div className="sticky bottom-0 bg-gradient-to-t from-slate-800 via-slate-800/90 to-transparent p-4 mt-4">
+              <div className="text-center">
+                <div className="inline-flex items-center space-x-2 bg-slate-700/80 px-4 py-3 rounded-lg">
+                  <span className="animate-bounce">👇</span>
+                  <span className="text-amber-300 font-medium text-sm">
+                    Keep scrolling to read all terms
+                  </span>
+                  <span className="text-slate-400 text-xs">
+                    ({Math.round(scrollPercentage)}% read)
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Agreement Checkbox - Only enabled after scrolling */}
+          <div className={`sticky bottom-0 bg-slate-800/90 backdrop-blur-sm p-4 rounded-xl border ${
+            hasScrolledToBottom ? 'border-cyan-500/50' : 'border-slate-700'
+          } mt-4 transition-all duration-300`}>
+            <div className="flex items-start space-x-3">
+              <div className="flex items-center h-6">
+                <input
+                  type="checkbox"
+                  id="agree-terms"
+                  checked={hasAgreedToTerms}
+                  onChange={(e) => {
+                    if (hasScrolledToBottom) {
+                      setHasAgreedToTerms(e.target.checked);
+                      setTermsError("");
+                    }
+                  }}
+                  disabled={!hasScrolledToBottom || isSubmitting}
+                  className={`w-5 h-5 rounded border-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition ${
+                    hasScrolledToBottom 
+                      ? 'border-slate-600 bg-slate-800 cursor-pointer' 
+                      : 'border-slate-700 bg-slate-900 cursor-not-allowed opacity-50'
+                  } ${hasAgreedToTerms ? 'bg-cyan-500 border-cyan-500' : ''}`}
+                />
+              </div>
+              <div className="flex-1">
+                <label 
+                  htmlFor="agree-terms" 
+                  className={`font-medium cursor-pointer ${
+                    hasScrolledToBottom ? 'text-white' : 'text-slate-500'
+                  }`}
+                >
+                  {hasScrolledToBottom 
+                    ? "✓ I have read, understood, and agree to all terms & conditions"
+                    : "Please scroll to the bottom to read all terms first"
+                  }
+                </label>
+                <p className="text-slate-400 text-sm mt-1">
+                  {hasScrolledToBottom 
+                    ? "You must check this box to complete your registration"
+                    : "Scroll down to continue"
+                  }
+                </p>
+                {termsError && (
+                  <p className="text-red-400 text-sm mt-2">{termsError}</p>
+                )}
+                
+              </div>
+            </div>
+            
+            {hasScrolledToBottom && (
+              <div className="mt-3 pt-3 border-t border-slate-700">
+                <div className="flex items-center justify-between">
+                  <span className="text-emerald-400 text-sm flex items-center">
+                    <CheckCircle className="w-4 h-4 mr-1" />
+                    All terms have been read
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    Scroll position: {Math.round(scrollPercentage)}%
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Modal Footer - Action Buttons */}
+      <div className="flex space-x-3 pt-4 border-t border-slate-700">
+        <Button
+          onClick={handleDisagreeToTerms}
+          variant="outline"
+          disabled={isSubmitting}
+          className="flex-1 bg-gradient-to-r from-blue-500 to-teal-500 text-white font-semibold py-3 hover:from-blue-600 hover:to-teal-600 disabled:opacity-50"
+              >
+          I Disagree - Cancel Registration
+        </Button>
+        <Button
+          onClick={handleAgreeToTerms}
+          disabled={!hasAgreedToTerms || isSubmitting}
+          className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold py-3 hover:from-green-600 hover:to-emerald-600 disabled:opacity-50"
+              >
+        
+          {isSubmitting ? (
+            <span className="flex items-center justify-center">
+              <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+              Processing...
+            </span>
+          ) : hasAgreedToTerms ? (
+            "Complete Registration"
+          ) : (
+            "I Agree - Complete Registration"
+          )}
+        </Button>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* ================= WELCOME MESSAGE ================= */}
       {showWelcome && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/95 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-gradient-to-br from-slate-800 to-slate-900 border border-cyan-500/40 rounded-2xl p-8 shadow-2xl mx-4">
+          <div className="w-full max-w-md bg-gradient-to-br from-slate-800 to-slate-900 border border-cyan-500/40 rounded-2xl p-7 shadow-2xl mx-4">
             <div className="text-center">
               {/* Success Icon */}
               <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center">
@@ -902,8 +1014,8 @@ const Registration = () => {
               </div>
               
               {/* Welcome Message */}
-              <h1 className="text-3xl font-bold text-white mb-3">
-                🎉 Welcome to AIFinverse!
+              <h1 className="text-2xl font-bold text-white mb-3">
+                🎉 Welcome to AIFinverse! 🎉
               </h1>
               
               <div className="mb-6">
@@ -916,20 +1028,44 @@ const Registration = () => {
               </div>
               
               {/* Success Details */}
-              <div className="bg-slate-800/50 rounded-xl p-4 mb-6">
-                <p className="text-slate-300 mb-2">
-                  ✅ Account created successfully
-                </p>
-                <p className="text-slate-300 mb-2">
-                  ✅ Terms & Conditions accepted
-                </p>
-                <p className="text-slate-300 mb-2">
-                  ✅ {market} market selected
-                </p>
-                <p className="text-slate-300">
-  ✅ {strategies.length} alert {strategies.length === 1 ? 'strategy' : 'strategies'} enabled
-</p>
-              </div>
+<div className="bg-slate-800/50 rounded-xl p-2 mb-6 border border-transparent">
+  <p className="text-slate-300 mb-2">
+    ✅ Account created successfully
+  </p>
+  <p className="text-slate-300 mb-2">
+    ✅ Terms & Conditions accepted
+  </p>
+   <p className="text-slate-300 mb-2">
+    ✅ {market} {market === 'Both' ? 'markets' : 'market'} selected
+  </p>
+  <p className="text-slate-300">
+    ✅ {strategies.length} alert {strategies.length === 1 ? 'strategy' : 'strategies'} enabled
+  </p>
+  
+ <div className="border-t border-slate-600 pt-4 mt-4 space-y-4">
+    {/* Create Watchlist Section */}
+    <div className="flex items-center justify-center gap-2">
+      <span className="text-yellow-300 font-bold text-l">
+        Create Watchlist
+      </span>
+    </div>
+  <div className="flex items-center justify-center gap-2">
+    <span className="text-yellow-300 font-bold text-l">
+      Subscribe
+    </span>
+    <img 
+      src="images/telegram.png" 
+      alt="Telegram" 
+      className="w-5 h-5" 
+    />
+    <span className="text-yellow-300 font-bold text-l animate-pulse">
+      {market === 'US' && 'on Live Alerts US page'}
+      {market === 'India' && 'on Live Alerts India page'}
+      {market === 'Both' && 'on Live Alerts India / US pages'}
+    </span>
+  </div>
+</div>
+</div>
               
               {/* Continue Button */}
               <Button

@@ -2,137 +2,523 @@ import React, { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
-import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { api } from "@/services/api";
-import { Target, Plus, Check, X, AlertTriangle, ChevronDown, ChevronUp, ExternalLink, Newspaper, BarChart, Bot, CheckCircle } from "lucide-react";
+import { 
+  Target, 
+  Plus, 
+  X, 
+  AlertTriangle, 
+  ChevronDown, 
+  ChevronUp, 
+  ExternalLink, 
+  Newspaper, 
+  CheckCircle,
+  BarChart,
+  Search,
+  Star,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
+  Clock
+} from "lucide-react";
+
+// Define interfaces
+interface Company {
+  company_name: string;
+  base_symbol: string;
+}
+
+interface WatchlistItem {
+  company_name: string;
+  base_symbol: string;
+}
 
 export default function Live_Alerts_India() {
   const [selectedAlertTypes, setSelectedAlertTypes] = useState<string[]>([]);
-  const [watchlist, setWatchlist] = useState<string[]>([]);
-  const [stockInput, setStockInput] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
   const [showAddStrategies, setShowAddStrategies] = useState(false);
   const [selectedNewStrategies, setSelectedNewStrategies] = useState<string[]>([]);
   const [isRemoving, setIsRemoving] = useState<string | null>(null);
   const [expandedAlertIndex, setExpandedAlertIndex] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [searchAlertQuery, setSearchAlertQuery] = useState("");
   
   // User market and strategies from registration
   const [userMarket, setUserMarket] = useState<string | null>(null);
-  const [userStrategies, setUserStrategies] = useState<string[]>([]);
   const [marketMismatch, setMarketMismatch] = useState(false);
   const [showMarketRedirect, setShowMarketRedirect] = useState(false);
-
+  
+  // States for stock selection
+  const [showStockList, setShowStockList] = useState(false);
+  const [indiaStocks, setIndiaStocks] = useState<Company[]>([]);
+  const [filteredStocks, setFilteredStocks] = useState<Company[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedStocks, setSelectedStocks] = useState<string[]>([]);
+  
   const [, setLocation] = useLocation();
 
-  // Use the custom hook for alert types
-  const { alertTypes } = useUserPreferences();
+  // States for dynamic alerts
+  const [alertsData, setAlertsData] = useState<any[]>([]); // Combined alerts data (ONLY 10 LATEST)
+  const [archivedAlerts, setArchivedAlerts] = useState<any[]>([]);
+  const [expandedArchivedAlert, setExpandedArchivedAlert] = useState<number | null>(null);
+  
+  // NEW STATES for archived alerts pagination
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage] = useState<number>(5);
+  const [showArchivedDetails, setShowArchivedDetails] = useState<boolean>(false);
+  const [selectedArchivedAlert, setSelectedArchivedAlert] = useState<any>(null);
+  
+  // Add this state for archive search
+  const [archiveSearchQuery, setArchiveSearchQuery] = useState<string>("");
+  
+  // Add this state for filtered archive groups
+  const [filteredArchiveGroups, setFilteredArchiveGroups] = useState<any[]>([]);
 
-  // India-specific alerts with detailed information
-  const alerts = [
-    { 
-      stock: "RELIANCE", 
-      type: "Momentum Riders (52-week High/Low, All-Time High/Low)",
-      price: "2,850.45",
-      change: "+1.24%",
-      rsi: "68.2",
-      rsiStatus: "OVERBOUGHT",
-      news: "https://economictimes.indiatimes.com/reliance",
-      chart: "https://in.tradingview.com/chart/?symbol=NSE%3ARELIANCE",
-      time: "10:30 AM",
-      strategy: "Momentum Riders"
-    },
-    { 
-      stock: "TCS", 
-      type: "Cycle Count Reversal",
-      price: "3,845.60",
-      change: "-0.56%",
-      rsi: "42.8",
-      rsiStatus: "NEUTRAL",
-      news: "https://economictimes.indiatimes.com/tcs",
-      chart: "https://in.tradingview.com/chart/?symbol=NSE%3ATCS",
-      time: "10:45 AM",
-      strategy: "Cycle Count Reversal"
-    },
-    {
-      stock: "HDFCBANK", 
-      type: "Double Top - Double Bottom (Contrabets)",
-      price: "1,725.30",
-      change: "-0.34%",
-      rsi: "35.2",
-      rsiStatus: "OVERSOLD",
-      news: "https://economictimes.indiatimes.com/hdfc-bank",
-      chart: "https://in.tradingview.com/chart/?symbol=NSE%3AHDFCBANK",
-      time: "11:00 AM",
-      strategy: "Double Top - Double Bottom (Contrabets)"
-    },
-    {
-      stock: "ITC", 
-      type: "Topping Candle - Bottoming Candle (Contrabets)",
-      price: "2,845.50",
-      change: "-0.85%",
-      rsi: "28.7",
-      rsiStatus: "OVERSOLD",
-      news: "https://economictimes.indiatimes.com/itc",
-      chart: "https://in.tradingview.com/chart/?symbol=NSE%3AITC",
-      time: "11:15 AM",
-      strategy: "Topping Candle - Bottoming Candle (Contrabets)"
-    },
-    { 
-      stock: "INFY", 
-      type: "Mean Reversion",
-      price: "1,645.80",
-      change: "+2.18%",
-      rsi: "72.5",
-      rsiStatus: "OVERBOUGHT",
-      news: "https://economictimes.indiatimes.com/infosys",
-      chart: "https://in.tradingview.com/chart/?symbol=NSE%3AINFY",
-      time: "11:30 AM",
-      strategy: "Mean Reversion"
-    },
-    { 
-      stock: "ICICIBANK", 
-      type: "Pattern Formation",
-      price: "1,045.75",
-      change: "+1.82%",
-      rsi: "58.6",
-      rsiStatus: "NEUTRAL",
-      news: "https://economictimes.indiatimes.com/icici-bank",
-      chart: "https://in.tradingview.com/chart/?symbol=NSE%3AICICIBANK",
-      time: "11:45 AM",
-      strategy: "Pattern Formation"
-    },
-    { 
-      stock: "SBIN", 
-      type: "Fundamental Picks (Earnings Season focused)",
-      price: "625.40",
-      change: "+0.92%",
-      rsi: "48.3",
-      rsiStatus: "NEUTRAL",
-      news: "https://economictimes.indiatimes.com/sbi",
-      chart: "https://in.tradingview.com/chart/?symbol=NSE%3ASBIN",
-      time: "12:00 PM",
-      strategy: "Fundamental Picks (Earnings Season focused)"
-    },
-  ];
+  // 🔒 Registration check (simple & safe)
+  const isRegistered = !!localStorage.getItem("userProfile");
+
+  useEffect(() => {
+    if (!isRegistered) {
+      alert("Please register first to access India Live Alerts");
+      setLocation("/registration");
+    }
+  }, [isRegistered, setLocation]);
+
+  // Update filtered stocks when search query changes
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredStocks(indiaStocks);
+    } else {
+      const query = searchQuery.toLowerCase();
+      const filtered = indiaStocks.filter(stock => 
+        stock.company_name.toLowerCase().includes(query) ||
+        stock.base_symbol.toLowerCase().includes(query)
+      );
+      setFilteredStocks(filtered);
+    }
+  }, [searchQuery, indiaStocks]);
+
+  // Load India stocks when modal opens
+  useEffect(() => {
+    const loadIndiaStocks = async () => {
+      try {
+        const response = await api.get("/companies/india");
+        setIndiaStocks(response.data.companies);
+        setFilteredStocks(response.data.companies);
+      } catch (error) {
+        console.error("Error loading India stocks:", error);
+        const sampleStocks: Company[] = [
+          { company_name: "Reliance Industries Limited", base_symbol: "RELIANCE" },
+          { company_name: "Tata Consultancy Services Limited", base_symbol: "TCS" },
+          { company_name: "HDFC Bank Limited", base_symbol: "HDFCBANK" },
+          { company_name: "Infosys Limited", base_symbol: "INFY" },
+          { company_name: "ICICI Bank Limited", base_symbol: "ICICIBANK" },
+          { company_name: "State Bank of India", base_symbol: "SBIN" },
+          { company_name: "ITC Limited", base_symbol: "ITC" },
+          { company_name: "Bharti Airtel Limited", base_symbol: "BHARTIARTL" },
+          { company_name: "Larsen & Toubro Limited", base_symbol: "LT" },
+          { company_name: "Kotak Mahindra Bank Limited", base_symbol: "KOTAKBANK" }
+        ];
+        setIndiaStocks(sampleStocks);
+        setFilteredStocks(sampleStocks);
+      }
+    };
+    
+    if (showStockList) {
+      loadIndiaStocks();
+      setSelectedStocks([]);
+    }
+  }, [showStockList]);
+
+  // Open modal if user types a valid stock
+  useEffect(() => {
+    if (searchAlertQuery.trim().length >= 2) {
+      const isStockMatch = indiaStocks.some(
+        stock => stock.base_symbol.toLowerCase() === searchAlertQuery.toLowerCase() ||
+                 stock.company_name.toLowerCase().includes(searchAlertQuery.toLowerCase())
+      );
+      
+      if (isStockMatch && !showStockList) {
+        setShowStockList(true);
+        setSearchQuery(searchAlertQuery);
+      }
+    }
+  }, [searchAlertQuery, indiaStocks, showStockList]);
+
+  // Toggle stock selection in modal
+  const toggleStockSelection = (companyName: string) => {
+    setSelectedStocks(prev =>
+      prev.includes(companyName)
+        ? prev.filter(name => name !== companyName)
+        : [...prev, companyName]
+    );
+  };
+
+  // Handle adding stocks
+  const handleAddStocks = async () => {
+    try {
+      const userProfile = localStorage.getItem("userProfile");
+      const userId = userProfile ? JSON.parse(userProfile).userId : null;
+
+      if (!userId) {
+        alert("Please log in first");
+        return;
+      }
+
+      if (selectedStocks.length === 0) {
+        alert("Please select at least one stock");
+        return;
+      }
+
+      const indiaCount = watchlist.length;
+      const totalAfterAdd = indiaCount + selectedStocks.length;
+      
+      if (totalAfterAdd > 20) {
+        alert(`India watchlist limit exceeded. You can only add ${20 - indiaCount} more stocks.`);
+        return;
+      }
+
+      const newStocksToAdd = selectedStocks.filter(companyName => 
+        !watchlist.some(item => item.company_name === companyName)
+      );
+
+      if (newStocksToAdd.length === 0) {
+        alert("Selected stocks are already in your watchlist");
+        return;
+      }
+
+      await api.post("/watchlist/update", {
+        user_id: userId,
+        companies: newStocksToAdd
+      });
+
+      const addedStocks = newStocksToAdd.map(companyName => {
+        const stock = indiaStocks.find(s => s.company_name === companyName);
+        return stock || { company_name: companyName, base_symbol: companyName.split(' ')[0] };
+      });
+      
+      setWatchlist(prev => [...prev, ...addedStocks]);
+      setSelectedStocks([]);
+      setShowStockList(false);
+      setSearchQuery("");
+      setSearchAlertQuery("");
+      
+      alert(`Successfully added ${newStocksToAdd.length} stock(s) to India watchlist!`);
+      refreshWatchlistFromBackend();
+      
+    } catch (error: any) {
+      console.error("Add stocks error:", error);
+      alert(error.response?.data?.detail || "Error adding stocks to watchlist");
+    }
+  };
+
+  // Refresh watchlist from backend
+  const refreshWatchlistFromBackend = async () => {
+    try {
+      const userProfile = localStorage.getItem("userProfile");
+      const userId = userProfile ? JSON.parse(userProfile).userId : null;
+      
+      if (userId) {
+        const response = await api.get(`/users/${userId}`);
+        const userData = response.data;
+        
+        if (userData.watchlist && userData.watchlist.India) {
+          setWatchlist(userData.watchlist.India);
+          console.log("✅ India Watchlist refreshed from backend:", userData.watchlist.India.length, "items");
+        }
+      }
+    } catch (error) {
+      console.error("Error refreshing watchlist:", error);
+    }
+  };
+
+  // Remove from watchlist
+  const removeFromWatchlist = async (companyName: string, symbol: string) => {
+    try {
+      const userProfile = localStorage.getItem("userProfile");
+      const userId = userProfile ? JSON.parse(userProfile).userId : null;
+      
+      if (!userId) {
+        alert("Please log in first");
+        return;
+      }
+      
+      await api.post("/watchlist/modify/india", {
+        user_id: userId,
+        companies: [companyName],
+        action: "remove"
+      });
+      
+      setWatchlist(prev => prev.filter(item => item.company_name !== companyName));
+      alert(`Removed ${symbol} from watchlist`);
+      
+    } catch (error: any) {
+      console.error("Error removing from watchlist:", error);
+      alert(error.response?.data?.detail || "Error removing stock from watchlist");
+    }
+  };
+
+  // Generate hardcoded alerts with dynamic timestamps
+  const generateHardcodedAlerts = () => {
+    const now = new Date();
+    const fiveMinAgo = new Date(now.getTime() - 5 * 60000);
+    const fifteenMinAgo = new Date(now.getTime() - 15 * 60000);
+    const thirtyMinAgo = new Date(now.getTime() - 30 * 60000);
+    const oneHourAgo = new Date(now.getTime() - 60 * 60000);
+    const twoHoursAgo = new Date(now.getTime() - 120 * 60000);
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60000);
+    const twoDaysAgo = new Date(now.getTime() - 48 * 60 * 60000);
+    const threeDaysAgo = new Date(now.getTime() - 72 * 60 * 60000);
+
+    return [
+      { 
+        stock: "RELIANCE", 
+        type: "Momentum Riders (52-week High/Low, All-Time High/Low)",
+        price: "₹2,850.45",
+        change: "+1.24%",
+        rsi: "68.2",
+        rsiStatus: "OVERBOUGHT",
+        news: "https://economictimes.indiatimes.com/reliance-industries-ltd/stocks/companyid-13215.cms",
+        chart: "https://in.tradingview.com/chart/?symbol=NSE%3ARELIANCE",
+        time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " IST",
+        strategy: "Momentum Riders",
+        date: now.toISOString().split('T')[0],
+        description: "Reliance Industries showing strong momentum with breakout above ₹2,800 level.",
+        volume: "15.2M",
+        marketCap: "₹19.2T",
+        timestamp: now.toISOString()
+      },
+      { 
+        stock: "TCS", 
+        type: "Cycle Count Reversal",
+        price: "₹3,845.60",
+        change: "-0.56%",
+        rsi: "42.8",
+        rsiStatus: "NEUTRAL",
+        news: "https://economictimes.indiatimes.com/tata-consultancy-services-ltd/stocks/companyid-13440.cms",
+        chart: "https://in.tradingview.com/chart/?symbol=NSE%3ATCS",
+        time: fifteenMinAgo.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " IST",
+        strategy: "Cycle Count Reversal",
+        date: fifteenMinAgo.toISOString().split('T')[0],
+        description: "TCS showing cycle reversal pattern after 5 days of decline.",
+        volume: "8.7M",
+        marketCap: "₹14.1T",
+        timestamp: fifteenMinAgo.toISOString()
+      },
+      {
+        stock: "HDFCBANK", 
+        type: "Swing Trade",
+        price: "₹1,725.30",
+        change: "-0.34%",
+        rsi: "35.2",
+        rsiStatus: "OVERSOLD",
+        news: "https://economictimes.indiatimes.com/hdfc-bank-ltd/stocks/companyid-11624.cms",
+        chart: "https://in.tradingview.com/chart/?symbol=NSE%3AHDFCBANK",
+        time: thirtyMinAgo.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " IST",
+        strategy: "Swing Trade",
+        date: thirtyMinAgo.toISOString().split('T')[0],
+        description: "HDFC Bank oversold with RSI below 40. Support at ₹1,700 level.",
+        volume: "22.5M",
+        marketCap: "₹10.8T",
+        timestamp: thirtyMinAgo.toISOString()
+      },
+      {
+        stock: "ITC", 
+        type: "Topping Candle - Bottoming Candle (Contrabets)",
+        price: "₹445.50",
+        change: "-0.85%",
+        rsi: "28.7",
+        rsiStatus: "OVERSOLD",
+        news: "https://economictimes.indiatimes.com/itc-ltd/stocks/companyid-11715.cms",
+        chart: "https://in.tradingview.com/chart/?symbol=NSE%3AITC",
+        time: oneHourAgo.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " IST",
+        strategy: "Topping Candle - Bottoming Candle (Contrabets)",
+        date: oneHourAgo.toISOString().split('T')[0],
+        description: "ITC showing bottoming candle pattern with long lower wick.",
+        volume: "18.9M",
+        marketCap: "₹5.2T",
+        timestamp: oneHourAgo.toISOString()
+      },
+      { 
+        stock: "INFY", 
+        type: "Mean Reversion",
+        price: "₹1,645.80",
+        change: "+2.18%",
+        rsi: "72.5",
+        rsiStatus: "OVERBOUGHT",
+        news: "https://economictimes.indiatimes.com/infosys-ltd/stocks/companyid-11706.cms",
+        chart: "https://in.tradingview.com/chart/?symbol=NSE%3AINFY",
+        time: twoHoursAgo.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " IST",
+        strategy: "Mean Reversion",
+        date: twoHoursAgo.toISOString().split('T')[0],
+        description: "Infosys overbought with RSI > 70. Mean reversion expected.",
+        volume: "12.3M",
+        marketCap: "₹6.8T",
+        timestamp: twoHoursAgo.toISOString()
+      },
+      { 
+        stock: "ICICIBANK", 
+        type: "Pattern Formation",
+        price: "₹1,045.75",
+        change: "+1.82%",
+        rsi: "58.6",
+        rsiStatus: "NEUTRAL",
+        news: "https://economictimes.indiatimes.com/icici-bank-ltd/stocks/companyid-11626.cms",
+        chart: "https://in.tradingview.com/chart/?symbol=NSE%3AICICIBANK",
+        time: yesterday.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " IST",
+        strategy: "Pattern Formation",
+        date: yesterday.toISOString().split('T')[0],
+        description: "ICICI Bank forming bullish flag pattern.",
+        volume: "25.1M",
+        marketCap: "₹7.3T",
+        timestamp: yesterday.toISOString()
+      },
+      { 
+        stock: "SBIN", 
+        type: "Fundamental Picks (Earnings Season focused)",
+        price: "₹625.40",
+        change: "+0.92%",
+        rsi: "48.3",
+        rsiStatus: "NEUTRAL",
+        news: "https://economictimes.indiatimes.com/state-bank-of-india/stocks/companyid-11645.cms",
+        chart: "https://in.tradingview.com/chart/?symbol=NSE%3ASBIN",
+        time: yesterday.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " IST",
+        strategy: "Fundamental Picks (Earnings Season focused)",
+        date: yesterday.toISOString().split('T')[0],
+        description: "SBI ahead of earnings: NII expected to grow 15% YoY.",
+        volume: "32.8M",
+        marketCap: "₹5.6T",
+        timestamp: yesterday.toISOString()
+      },
+      {
+        stock: "BHARTIARTL",
+        type: "Momentum Riders (52-week High/Low, All-Time High/Low)",
+        price: "₹1,285.60",
+        change: "+2.45%",
+        rsi: "71.3",
+        rsiStatus: "OVERBOUGHT",
+        news: "https://economictimes.indiatimes.com/bharti-airtel-ltd/stocks/companyid-11671.cms",
+        chart: "https://in.tradingview.com/chart/?symbol=NSE%3ABHARTIARTL",
+        time: twoDaysAgo.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " IST",
+        strategy: "Momentum Riders",
+        date: twoDaysAgo.toISOString().split('T')[0],
+        description: "Bharti Airtel at 52-week high on tariff hike expectations.",
+        volume: "14.2M",
+        marketCap: "₹7.1T",
+        timestamp: twoDaysAgo.toISOString()
+      },
+      {
+        stock: "BAJFINANCE",
+        type: "Mean Reversion",
+        price: "₹7,125.80",
+        change: "-1.34%",
+        rsi: "32.8",
+        rsiStatus: "OVERSOLD",
+        news: "https://economictimes.indiatimes.com/bajaj-finance-ltd/stocks/companyid-13238.cms",
+        chart: "https://in.tradingview.com/chart/?symbol=NSE%3ABAJFINANCE",
+        time: threeDaysAgo.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " IST",
+        strategy: "Mean Reversion",
+        date: threeDaysAgo.toISOString().split('T')[0],
+        description: "Bajaj Finance oversold after 12% correction.",
+        volume: "5.9M",
+        marketCap: "₹4.3T",
+        timestamp: threeDaysAgo.toISOString()
+      }
+    ];
+  };
+
+  const hardcodedAlerts = generateHardcodedAlerts();
 
   // Define available strategies for Add More Strategies
   const allStrategies = [
     "Momentum Riders (52-week High/Low, All-Time High/Low)",
     "Cycle Count Reversal",
-    "Double Top - Double Bottom (Contrabets)",
+    "Swing Trade",
     "Topping Candle - Bottoming Candle (Contrabets)",
     "Mean Reversion",
     "Pattern Formation",
     "Fundamental Picks (Earnings Season focused)"
   ];
 
+  // Helper function to get RSI status from value
+  const getRsiStatusFromValue = (rsiValue: number) => {
+    if (rsiValue >= 70) return "OVERBOUGHT";
+    if (rsiValue <= 30) return "OVERSOLD";
+    return "NEUTRAL";
+  };
+
+  // Function to fetch momentum alerts from API
+  const fetchMomentumAlerts = async () => {
+    try {
+      const momentumResponse = await api.get("/alerts/live/india");
+      console.log("✅ Momentum API called successfully");
+      
+      if (momentumResponse.data && Array.isArray(momentumResponse.data.alerts)) {
+        return momentumResponse.data.alerts.map((alert: any) => ({
+          stock: alert.symbol || alert.stock,
+          symbol: alert.symbol,
+          type: "Momentum Riders (52-week High/Low, All-Time High/Low)",
+          price: alert.price ? `₹${typeof alert.price === 'number' ? alert.price.toFixed(2) : alert.price}` : "N/A",
+          change: alert.pct_change !== undefined 
+            ? `${alert.pct_change > 0 ? '+' : ''}${typeof alert.pct_change === 'number' ? alert.pct_change.toFixed(2) : alert.pct_change}%` 
+            : "0%",
+          rsi: alert.rsi ? (typeof alert.rsi === 'number' ? alert.rsi.toFixed(2) : alert.rsi) : "50",
+          rsiStatus: getRsiStatusFromValue(alert.rsi || 50),
+          news: alert.news_link || alert.news || `https://economictimes.indiatimes.com/${alert.symbol?.toLowerCase()}`,
+          chart: alert.tradingview_link || alert.chart || `https://in.tradingview.com/chart/?symbol=NSE%3A${alert.symbol}`,
+          time: alert.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          strategy: "Momentum Riders",
+          date: alert.date || new Date().toISOString().split('T')[0],
+          timestamp: alert.timestamp || new Date().toISOString(),
+          description: alert.description || `${alert.symbol} triggered a 52-week high momentum alert with RSI ${alert.rsi?.toFixed(2) || 'N/A'}.`,
+          marketCap: alert.marketCap || "N/A"
+        }));
+      }
+    } catch (error) {
+      console.error("Error calling momentum API:", error);
+    }
+    return [];
+  };
+
+  // Filter archive groups based on watchlist stocks AND search query
+  useEffect(() => {
+    const watchlistSymbols = watchlist.map(item => item.base_symbol);
+    
+    const watchlistArchivedAlerts = archivedAlerts
+      .map(group => ({
+        date: group.date,
+        alerts: group.alerts.filter((alert: any) => 
+          watchlistSymbols.includes(alert.stock)
+        )
+      }))
+      .filter(group => group.alerts.length > 0);
+    
+    if (!archiveSearchQuery.trim()) {
+      setFilteredArchiveGroups(watchlistArchivedAlerts);
+    } else {
+      const query = archiveSearchQuery.toLowerCase();
+      const filtered = watchlistArchivedAlerts
+        .map(group => ({
+          date: group.date,
+          alerts: group.alerts.filter((alert: any) => 
+            alert.stock.toLowerCase().includes(query) ||
+            (alert.symbol && alert.symbol.toLowerCase().includes(query))
+          )
+        }))
+        .filter(group => group.alerts.length > 0);
+      
+      setFilteredArchiveGroups(filtered);
+    }
+  }, [archiveSearchQuery, archivedAlerts, watchlist]);
+
+  // MAIN LOAD FUNCTION - CRITICAL FIX: Load watchlist FIRST
   useEffect(() => {
     const loadUserPreferences = async () => {
       try {
         console.log("=== LOADING INDIA PREFERENCES ===");
         
-        // 1. Get user profile
         const userProfile = localStorage.getItem("userProfile");
         if (!userProfile) {
           setIsLoading(false);
@@ -148,13 +534,29 @@ export default function Live_Alerts_India() {
           return;
         }
         
-        // 2. Get user's selected market
         const savedMarket = localStorage.getItem('selectedMarket') || profile.selectedMarket || "India";
         setUserMarket(savedMarket);
         
-        
-        // 4. Get user ID and fetch from backend
         const userId = profile.userId || profile.user_id || localStorage.getItem("userId");
+        
+        // CRITICAL FIX: FIRST load watchlist
+        let userWatchlist: WatchlistItem[] = [];
+        if (userId) {
+          try {
+            const response = await api.get(`/users/${userId}`);
+            const userData = response.data;
+            
+            if (userData.watchlist && userData.watchlist.India) {
+              userWatchlist = userData.watchlist.India;
+              setWatchlist(userWatchlist);
+              console.log("✅ India watchlist loaded:", userWatchlist.length, "items");
+            }
+          } catch (error) {
+            console.error("Error loading watchlist:", error);
+          }
+        }
+        
+        let indiaStrategies: string[] = [];
         
         if (userId) {
           try {
@@ -163,31 +565,121 @@ export default function Live_Alerts_India() {
             
             console.log("Backend user data:", userData);
 
-            // === MARKET ACCESS CHECK GOES HERE ===
-    // Check if user has India access in backend
-    const hasIndiaAccess = userData?.market_preferences?.India?.is_active || 
-                          userData?.india_alerts?.is_active || 
-                          savedMarket === "India" || 
-                          savedMarket === "Both";
-    
-    if (!hasIndiaAccess) {
-      setMarketMismatch(true);
-      setTimeout(() => {
-        setShowMarketRedirect(true);
-      }, 1000);
-      setIsLoading(false);
-      return;
-    }
+            const hasIndiaAccess = userData?.market_preferences?.India?.is_active || 
+                                 userData?.india_alerts?.is_active || 
+                                 savedMarket === "India" || 
+                                 savedMarket === "Both";
+
+            if (!hasIndiaAccess) {
+              setMarketMismatch(true);
+              setTimeout(() => {
+                setShowMarketRedirect(true);
+              }, 1000);
+              setIsLoading(false);
+              return;
+            }
             
-            // Extract India strategies from backend
             if (userData.india_alerts && userData.india_alerts.strategies) {
-              const indiaStrategies = userData.india_alerts.strategies;
+              indiaStrategies = userData.india_alerts.strategies;
               
               if (Array.isArray(indiaStrategies)) {
                 console.log("India strategies from backend:", indiaStrategies);
                 
                 localStorage.setItem("alertPreferencesIndia", JSON.stringify(indiaStrategies));
                 setSelectedAlertTypes(indiaStrategies);
+                
+                // Get watchlist symbols (use the one we already loaded)
+                const watchlistSymbols = userWatchlist.map(item => item.base_symbol);
+                
+                // If no watchlist stocks, show empty
+                if (watchlistSymbols.length === 0) {
+                  setAlertsData([]);
+                  setArchivedAlerts([]);
+                  setIsLoading(false);
+                  return;
+                }
+                
+                // CHECK: If Momentum strategy is selected, fetch live alerts
+                if (indiaStrategies.includes("Momentum Riders (52-week High/Low, All-Time High/Low)")) {
+                  console.log("Momentum strategy is active, fetching live alerts...");
+                  const momentumAlertsData = await fetchMomentumAlerts();
+                  
+                  // Filter to ONLY watchlist stocks
+                  const watchlistOnlyAlerts = momentumAlertsData.filter(alert => 
+                    watchlistSymbols.includes(alert.stock)
+                  );
+                  
+                  // Sort by timestamp (newest first)
+                  const sortedAlerts = watchlistOnlyAlerts.sort((a, b) => 
+                    new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+                  );
+                  
+                  // Take ONLY the latest 10 alerts for center section
+                  const latestAlerts = sortedAlerts.slice(0, 10);
+                  
+                  // ALL remaining alerts go to archive
+                  const remainingAlerts = sortedAlerts.slice(10);
+                  
+                  console.log(`Center: ${latestAlerts.length}, Archive: ${remainingAlerts.length}`);
+                  
+                  // Group remaining alerts by date
+                  const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
+                    const date = alert.date;
+                    if (!groups[date]) {
+                      groups[date] = [];
+                    }
+                    groups[date].push(alert);
+                    return groups;
+                  }, {});
+                  
+                  const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
+                    .map(([date, alerts]) => ({ date, alerts }))
+                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                  
+                  setAlertsData(latestAlerts);
+                  setArchivedAlerts(archivedAlertsArray);
+                } else {
+                  // If Momentum is not selected, only show hardcoded alerts
+                  const filteredAlerts = hardcodedAlerts.filter(alert => 
+                    indiaStrategies.includes(alert.type)
+                  );
+                  
+                  // Sort by timestamp
+                  const sortedAlerts = filteredAlerts.sort((a, b) => 
+                    new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+                  );
+                  
+                  // Filter to ONLY watchlist stocks
+                  const watchlistOnlyAlerts = sortedAlerts.filter(alert => 
+                    watchlistSymbols.includes(alert.stock)
+                  );
+                  
+                  // Take ONLY the latest 10 alerts for center section
+                  const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
+                  
+                  // ALL remaining alerts go to archive
+                  const remainingAlerts = watchlistOnlyAlerts.slice(10);
+                  
+                  console.log(`Center: ${latestAlerts.length}, Archive: ${remainingAlerts.length}`);
+                  
+                  // Group remaining alerts by date
+                  const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
+                    const date = alert.date;
+                    if (!groups[date]) {
+                      groups[date] = [];
+                    }
+                    groups[date].push(alert);
+                    return groups;
+                  }, {});
+                  
+                  const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
+                    .map(([date, alerts]) => ({ date, alerts }))
+                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                  
+                  setAlertsData(latestAlerts);
+                  setArchivedAlerts(archivedAlertsArray);
+                }
+                
                 setIsLoading(false);
                 return;
               }
@@ -204,7 +696,99 @@ export default function Live_Alerts_India() {
           try {
             const parsed = JSON.parse(savedIndiaPrefs);
             if (Array.isArray(parsed)) {
+              indiaStrategies = parsed;
               setSelectedAlertTypes(parsed);
+              
+              // Get watchlist symbols
+              const watchlistSymbols = userWatchlist.map(item => item.base_symbol);
+              
+              // If no watchlist stocks, show empty
+              if (watchlistSymbols.length === 0) {
+                setAlertsData([]);
+                setArchivedAlerts([]);
+                setIsLoading(false);
+                return;
+              }
+              
+              // CHECK: If Momentum strategy is selected, fetch live alerts
+              if (parsed.includes("Momentum Riders (52-week High/Low, All-Time High/Low)")) {
+                console.log("Momentum strategy is active in localStorage, fetching live alerts...");
+                const momentumAlertsData = await fetchMomentumAlerts();
+                
+                // Filter to ONLY watchlist stocks
+                const watchlistOnlyAlerts = momentumAlertsData.filter(alert => 
+                  watchlistSymbols.includes(alert.stock)
+                );
+                
+                // Sort by timestamp
+                const sortedAlerts = watchlistOnlyAlerts.sort((a, b) => 
+                  new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+                );
+                
+                // Take ONLY the latest 10 alerts for center section
+                const latestAlerts = sortedAlerts.slice(0, 10);
+                
+                // ALL remaining alerts go to archive
+                const remainingAlerts = sortedAlerts.slice(10);
+                
+                console.log(`Center: ${latestAlerts.length}, Archive: ${remainingAlerts.length}`);
+                
+                const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
+                  const date = alert.date;
+                  if (!groups[date]) {
+                    groups[date] = [];
+                  }
+                  groups[date].push(alert);
+                  return groups;
+                }, {});
+                
+                const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
+                  .map(([date, alerts]) => ({ date, alerts }))
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                
+                setAlertsData(latestAlerts);
+                setArchivedAlerts(archivedAlertsArray);
+              } else {
+                // If Momentum is not selected, only show hardcoded alerts
+                const filteredAlerts = hardcodedAlerts.filter(alert => 
+                  parsed.includes(alert.type)
+                );
+                
+                // Sort by timestamp
+                const sortedAlerts = filteredAlerts.sort((a, b) => 
+                  new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+                );
+                
+                // Filter to ONLY watchlist stocks
+                const watchlistOnlyAlerts = sortedAlerts.filter(alert => 
+                  watchlistSymbols.includes(alert.stock)
+                );
+                
+                // Take ONLY the latest 10 alerts for center section
+                const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
+                
+                // ALL remaining alerts go to archive
+                const remainingAlerts = watchlistOnlyAlerts.slice(10);
+                
+                console.log(`Center: ${latestAlerts.length}, Archive: ${remainingAlerts.length}`);
+                
+                const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
+                  const date = alert.date;
+                  if (!groups[date]) {
+                    groups[date] = [];
+                  }
+                  groups[date].push(alert);
+                  return groups;
+                }, {});
+                
+                const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
+                  .map(([date, alerts]) => ({ date, alerts }))
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                
+                setAlertsData(latestAlerts);
+                setArchivedAlerts(archivedAlertsArray);
+              }
+              
               setIsLoading(false);
               return;
             }
@@ -213,7 +797,7 @@ export default function Live_Alerts_India() {
           }
         }
         
-        // 6. If fresh registration, register India market
+        // 6. If fresh registration
         const isFreshRegistration = localStorage.getItem("freshRegistration") === "true";
         
         if (isFreshRegistration && savedMarket === "India") {
@@ -223,8 +807,8 @@ export default function Live_Alerts_India() {
           if (savedStrategies) {
             try {
               const registrationStrategies = JSON.parse(savedStrategies);
+              indiaStrategies = registrationStrategies;
               
-              // Register India market to backend
               if (userEmail) {
                 try {
                   await api.post("/register/preferences", {
@@ -238,19 +822,142 @@ export default function Live_Alerts_India() {
                 }
               }
               
-              // Save locally
               localStorage.setItem("alertPreferencesIndia", JSON.stringify(registrationStrategies));
               setSelectedAlertTypes(registrationStrategies);
+              
+              // Get watchlist symbols
+              const watchlistSymbols = userWatchlist.map(item => item.base_symbol);
+              
+              // If no watchlist stocks, show empty
+              if (watchlistSymbols.length === 0) {
+                setAlertsData([]);
+                setArchivedAlerts([]);
+                setIsLoading(false);
+                return;
+              }
+              
+              if (registrationStrategies.includes("Momentum Riders (52-week High/Low, All-Time High/Low)")) {
+                console.log("Momentum strategy selected in fresh registration, fetching live alerts...");
+                const momentumAlertsData = await fetchMomentumAlerts();
+                
+                const watchlistOnlyAlerts = momentumAlertsData.filter(alert => 
+                  watchlistSymbols.includes(alert.stock)
+                );
+                
+                const sortedAlerts = watchlistOnlyAlerts.sort((a, b) => 
+                  new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+                );
+                
+                const latestAlerts = sortedAlerts.slice(0, 10);
+                const remainingAlerts = sortedAlerts.slice(10);
+                
+                const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
+                  const date = alert.date;
+                  if (!groups[date]) {
+                    groups[date] = [];
+                  }
+                  groups[date].push(alert);
+                  return groups;
+                }, {});
+                
+                const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
+                  .map(([date, alerts]) => ({ date, alerts }))
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                
+                setAlertsData(latestAlerts);
+                setArchivedAlerts(archivedAlertsArray);
+              } else {
+                const filteredAlerts = hardcodedAlerts.filter(alert => 
+                  registrationStrategies.includes(alert.type)
+                );
+                
+                const sortedAlerts = filteredAlerts.sort((a, b) => 
+                  new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+                );
+                
+                const watchlistOnlyAlerts = sortedAlerts.filter(alert => 
+                  watchlistSymbols.includes(alert.stock)
+                );
+                
+                const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
+                const remainingAlerts = watchlistOnlyAlerts.slice(10);
+                
+                const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
+                  const date = alert.date;
+                  if (!groups[date]) {
+                    groups[date] = [];
+                  }
+                  groups[date].push(alert);
+                  return groups;
+                }, {});
+                
+                const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
+                  .map(([date, alerts]) => ({ date, alerts }))
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                
+                setAlertsData(latestAlerts);
+                setArchivedAlerts(archivedAlertsArray);
+              }
+              
               localStorage.removeItem("freshRegistration");
+              setIsLoading(false);
+              return;
             } catch (parseError) {
               console.error("Error parsing strategies:", parseError);
             }
           }
         }
         
+        // Default fallback - use hardcoded alerts
+        const sortedAlerts = hardcodedAlerts.sort((a, b) => 
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+        
+        // Get watchlist symbols
+        const watchlistSymbols = userWatchlist.map(item => item.base_symbol);
+        
+        // If no watchlist stocks, show empty
+        if (watchlistSymbols.length === 0) {
+          setAlertsData([]);
+          setArchivedAlerts([]);
+          setIsLoading(false);
+          return;
+        }
+        
+        // Filter to ONLY watchlist stocks
+        const watchlistOnlyAlerts = sortedAlerts.filter(alert => 
+          watchlistSymbols.includes(alert.stock)
+        );
+        
+        // Take ONLY the latest 10 alerts for center section
+        const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
+        
+        // ALL remaining alerts go to archive
+        const remainingAlerts = watchlistOnlyAlerts.slice(10);
+        
+        console.log(`Center: ${latestAlerts.length}, Archive: ${remainingAlerts.length}`);
+        
+        const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
+          const date = alert.date;
+          if (!groups[date]) {
+            groups[date] = [];
+          }
+          groups[date].push(alert);
+          return groups;
+        }, {});
+        
+        const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
+          .map(([date, alerts]) => ({ date, alerts }))
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        setAlertsData(latestAlerts);
+        setArchivedAlerts(archivedAlertsArray);
+        setIsLoading(false);
+        
       } catch (error) {
         console.error("Error loading preferences:", error);
-      } finally {
+        setAlertsData([]);
+        setArchivedAlerts([]);
         setIsLoading(false);
       }
     };
@@ -275,7 +982,6 @@ export default function Live_Alerts_India() {
     }
 
     try {
-      // Get user email
       const userProfile = localStorage.getItem("userProfile");
       const userEmail = userProfile ? JSON.parse(userProfile).email : null;
       
@@ -284,7 +990,6 @@ export default function Live_Alerts_India() {
         return;
       }
 
-      // Get current strategies
       let currentStrategies: string[] = [];
       const savedIndiaPrefs = localStorage.getItem("alertPreferencesIndia");
       
@@ -299,32 +1004,83 @@ export default function Live_Alerts_India() {
         }
       }
       
-      // Merge strategies
       const mergedStrategies = [...new Set([...currentStrategies, ...selectedNewStrategies])];
+
+      const isMomentumSelected = mergedStrategies.includes("Momentum Riders (52-week High/Low, All-Time High/Low)");
       
-      // Update UI
-      setSelectedAlertTypes(mergedStrategies);
+      let momentumAlertsData = [];
       
-      // Save to localStorage
-      localStorage.setItem("alertPreferencesIndia", JSON.stringify(mergedStrategies));
-      
-      // IMPORTANT: Use UPDATE endpoint for each new strategy (not register)
-      // Backend expects single strategy per update
-      for (const strategy of selectedNewStrategies) {
-  try {
-    await api.put("/update/preferences", {
-      email: userEmail.toLowerCase(),
-      market: "India",
-      strategy: strategy,
-      action: "add"  // <-- ADD THIS!
-    });
-    console.log(`✅ Strategy "${strategy}" added to backend`);
-  } catch (error: any) {
-    console.error(`❌ Failed to add strategy "${strategy}":`, error.response?.data || error.message);
-  }
+      if (isMomentumSelected) {
+        momentumAlertsData = await fetchMomentumAlerts();
       }
       
-      // Success
+      setSelectedAlertTypes(mergedStrategies);
+      localStorage.setItem("alertPreferencesIndia", JSON.stringify(mergedStrategies));
+      
+      for (const strategy of selectedNewStrategies) {
+        try {
+          await api.put("/update/preferences", {
+            email: userEmail.toLowerCase(),
+            market: "India",
+            strategy: strategy,
+            action: "add"
+          });
+          console.log(`✅ Strategy "${strategy}" added to backend`);
+        } catch (error: any) {
+          console.error(`❌ Failed to add strategy "${strategy}":`, error.response?.data || error.message);
+        }
+      }
+
+      // Get current watchlist
+      const watchlistSymbols = watchlist.map(item => item.base_symbol);
+      
+      let allAlerts: any[] = [];
+      
+      // Add non-momentum alerts
+      const nonMomentumStrategies = mergedStrategies.filter(s => 
+        s !== "Momentum Riders (52-week High/Low, All-Time High/Low)"
+      );
+      
+      nonMomentumStrategies.forEach(strategy => {
+        const strategyAlerts = hardcodedAlerts.filter(alert => alert.type === strategy);
+        allAlerts = [...allAlerts, ...strategyAlerts];
+      });
+      
+      // Add momentum alerts if selected
+      if (isMomentumSelected) {
+        allAlerts = [...allAlerts, ...momentumAlertsData];
+      }
+      
+      // Filter to ONLY watchlist stocks
+      const watchlistOnlyAlerts = allAlerts.filter(alert => 
+        watchlistSymbols.includes(alert.stock)
+      );
+      
+      // Sort by timestamp
+      const sortedAlerts = watchlistOnlyAlerts.sort((a, b) => 
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+      
+      // Take latest 10 for center
+      const latestAlerts = sortedAlerts.slice(0, 10);
+      const remainingAlerts = sortedAlerts.slice(10);
+      
+      const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
+        const date = alert.date;
+        if (!groups[date]) {
+          groups[date] = [];
+        }
+        groups[date].push(alert);
+        return groups;
+      }, {});
+      
+      const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
+        .map(([date, alerts]) => ({ date, alerts }))
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      setAlertsData(latestAlerts);
+      setArchivedAlerts(archivedAlertsArray);
+      
       alert(`${selectedNewStrategies.length} strategy(ies) added successfully!`);
       setSelectedNewStrategies([]);
       setShowAddStrategies(false);
@@ -338,56 +1094,96 @@ export default function Live_Alerts_India() {
 
   // Handle remove strategy
   const handleRemoveStrategy = async (strategyToRemove: string) => {
-  console.log("=== REMOVE INDIA STRATEGY ===");
-  
-  if (!confirm(`Are you sure you want to remove "${strategyToRemove}" alerts?`)) {
-    return;
-  }
-  
-  setIsRemoving(strategyToRemove);
-  
-  try {
-    // Get user email
-    const userProfile = localStorage.getItem("userProfile");
-    const userEmail = userProfile ? JSON.parse(userProfile).email : null;
+    console.log("=== REMOVE INDIA STRATEGY ===");
     
-    if (!userEmail) {
-      alert("Please log in first");
-      setIsRemoving(null);
+    if (!confirm(`Are you sure you want to remove "${strategyToRemove}" alerts?`)) {
       return;
     }
     
-    // IMPORTANT: Send REMOVE request to backend
-    await api.put("/update/preferences", {
-      email: userEmail.toLowerCase(),
-      market: "India",
-      strategy: strategyToRemove,
-      action: "remove"  // <-- THIS IS THE KEY CHANGE!
-    });
+    setIsRemoving(strategyToRemove);
     
-    // Update UI after successful backend removal
-    const updatedStrategies = selectedAlertTypes.filter(strategy => strategy !== strategyToRemove);
-    setSelectedAlertTypes(updatedStrategies);
-    
-    // Save to localStorage
-    localStorage.setItem("alertPreferencesIndia", JSON.stringify(updatedStrategies));
-    
-    // Success
-    window.dispatchEvent(new Event('storage'));
-    
-    alert(`✓ "${strategyToRemove}" alerts have been removed!`);
-    setIsRemoving(null);
-    
-  } catch (error: any) {
-    console.error("Error in handleRemoveStrategy:", error);
-    
-    // Show backend error
-    alert(`❌ Failed to remove strategy: ${error.response?.data?.detail || error.message}`);
-    
-    // Keep UI as is if backend fails
-    setIsRemoving(null);
-  }
-};
+    try {
+      const userProfile = localStorage.getItem("userProfile");
+      const userEmail = userProfile ? JSON.parse(userProfile).email : null;
+      
+      if (!userEmail) {
+        alert("Please log in first");
+        setIsRemoving(null);
+        return;
+      }
+      
+      await api.put("/update/preferences", {
+        email: userEmail.toLowerCase(),
+        market: "India",
+        strategy: strategyToRemove,
+        action: "remove"
+      });
+      
+      const updatedStrategies = selectedAlertTypes.filter(strategy => strategy !== strategyToRemove);
+      setSelectedAlertTypes(updatedStrategies);
+      localStorage.setItem("alertPreferencesIndia", JSON.stringify(updatedStrategies));
+      
+      // Get current watchlist
+      const watchlistSymbols = watchlist.map(item => item.base_symbol);
+      
+      const isMomentumSelected = updatedStrategies.includes("Momentum Riders (52-week High/Low, All-Time High/Low)");
+      
+      let allAlerts: any[] = [];
+      
+      if (isMomentumSelected) {
+        const momentumAlertsData = await fetchMomentumAlerts();
+        allAlerts = [...allAlerts, ...momentumAlertsData];
+      }
+      
+      const nonMomentumStrategies = updatedStrategies.filter(s => 
+        s !== "Momentum Riders (52-week High/Low, All-Time High/Low)"
+      );
+      
+      nonMomentumStrategies.forEach(strategy => {
+        const strategyAlerts = hardcodedAlerts.filter(alert => alert.type === strategy);
+        allAlerts = [...allAlerts, ...strategyAlerts];
+      });
+      
+      // Filter to ONLY watchlist stocks
+      const watchlistOnlyAlerts = allAlerts.filter(alert => 
+        watchlistSymbols.includes(alert.stock)
+      );
+      
+      // Sort by timestamp
+      const sortedAlerts = watchlistOnlyAlerts.sort((a, b) => 
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+      
+      // Take latest 10 for center
+      const latestAlerts = sortedAlerts.slice(0, 10);
+      const remainingAlerts = sortedAlerts.slice(10);
+      
+      const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
+        const date = alert.date;
+        if (!groups[date]) {
+          groups[date] = [];
+        }
+        groups[date].push(alert);
+        return groups;
+      }, {});
+      
+      const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
+        .map(([date, alerts]) => ({ date, alerts }))
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      setAlertsData(latestAlerts);
+      setArchivedAlerts(archivedAlertsArray);
+      
+      window.dispatchEvent(new Event('storage'));
+      alert(`✓ "${strategyToRemove}" alerts have been removed!`);
+      setIsRemoving(null);
+      
+    } catch (error: any) {
+      console.error("Error in handleRemoveStrategy:", error);
+      alert(`❌ Failed to remove strategy: ${error.response?.data?.detail || error.message}`);
+      setIsRemoving(null);
+    }
+  };
 
   const toggleNewStrategy = (strategy: string) => {
     setSelectedNewStrategies(prev =>
@@ -397,49 +1193,202 @@ export default function Live_Alerts_India() {
     );
   };
 
-  // Get strategies not yet selected
   const availableStrategies = allStrategies.filter(
     strategy => !selectedAlertTypes.includes(strategy)
   );
 
-  // Filter alerts based on selected types
-  const filteredAlerts = selectedAlertTypes.length === 0 
-    ? [] 
-    : alerts.filter((alert) => {
-        const typeMatch = selectedAlertTypes.includes(alert.type);
-        const watchlistMatch = watchlist.length === 0 || watchlist.includes(alert.stock);
-        return typeMatch && watchlistMatch;
-      });
+  // ✅ Show ONLY alerts for watchlist stocks - already filtered
+  const filteredAlerts = alertsData;
+
+  // Clear archive search
+  const clearArchiveSearch = () => {
+    setArchiveSearchQuery("");
+  };
+
+  // Format date for archive display (Thu 12/2/2026)
+  const formatArchiveDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-IN', { 
+      weekday: 'short', 
+      month: 'numeric', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+  };
+
+  // Handle clicking on archive date
+  const handleArchiveDateClick = (date: string, alerts: any[]) => {
+    setSelectedArchivedAlert({
+      type: 'date',
+      date: date,
+      alerts: alerts
+    });
+    setShowArchivedDetails(true);
+  };
 
   // Refresh function
   const handleRefresh = async () => {
     try {
-      // Get user ID
+      await refreshWatchlistFromBackend();
+      
       const userProfile = localStorage.getItem("userProfile");
       const userId = userProfile ? JSON.parse(userProfile).userId : null;
       
+      let indiaStrategies: string[] = [];
+      
       if (userId) {
-        // Fetch fresh data from backend
         const response = await api.get(`/users/${userId}`);
         const userData = response.data;
         
         if (userData.india_alerts && userData.india_alerts.strategies) {
-          const indiaStrategies = userData.india_alerts.strategies;
+          indiaStrategies = userData.india_alerts.strategies;
           
           setSelectedAlertTypes(indiaStrategies);
           localStorage.setItem("alertPreferencesIndia", JSON.stringify(indiaStrategies));
           
-          alert(`Refreshed! Found ${indiaStrategies.length} India strategies`);
+          const watchlistSymbols = watchlist.map(item => item.base_symbol);
+          
+          if (indiaStrategies.includes("Momentum Riders (52-week High/Low, All-Time High/Low)")) {
+            console.log("Refreshing Momentum alerts...");
+            const momentumAlertsData = await fetchMomentumAlerts();
+            
+            const watchlistOnlyAlerts = momentumAlertsData.filter(alert => 
+              watchlistSymbols.includes(alert.stock)
+            );
+            
+            const sortedAlerts = watchlistOnlyAlerts.sort((a, b) => 
+              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+            );
+            
+            const latestAlerts = sortedAlerts.slice(0, 10);
+            const remainingAlerts = sortedAlerts.slice(10);
+            
+            const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
+              const date = alert.date;
+              if (!groups[date]) {
+                groups[date] = [];
+              }
+              groups[date].push(alert);
+              return groups;
+            }, {});
+            
+            const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
+              .map(([date, alerts]) => ({ date, alerts }))
+              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            
+            setAlertsData(latestAlerts);
+            setArchivedAlerts(archivedAlertsArray);
+            alert(`Refreshed! Found ${watchlistOnlyAlerts.length} alerts for your watchlist, showing latest 10`);
+          } else {
+            const filteredAlerts = hardcodedAlerts.filter(alert => 
+              indiaStrategies.includes(alert.type)
+            );
+            
+            const sortedAlerts = filteredAlerts.sort((a, b) => 
+              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+            );
+            
+            const watchlistOnlyAlerts = sortedAlerts.filter(alert => 
+              watchlistSymbols.includes(alert.stock)
+            );
+            
+            const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
+            const remainingAlerts = watchlistOnlyAlerts.slice(10);
+            
+            const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
+              const date = alert.date;
+              if (!groups[date]) {
+                groups[date] = [];
+              }
+              groups[date].push(alert);
+              return groups;
+            }, {});
+            
+            const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
+              .map(([date, alerts]) => ({ date, alerts }))
+              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            
+            setAlertsData(latestAlerts);
+            setArchivedAlerts(archivedAlertsArray);
+            alert(`Refreshed! Found ${watchlistOnlyAlerts.length} alerts for your watchlist, showing latest 10`);
+          }
+          
           return;
         }
       }
       
-      // Fallback
       const saved = localStorage.getItem("alertPreferencesIndia");
       if (saved) {
         const parsed = JSON.parse(saved);
+        indiaStrategies = parsed;
         setSelectedAlertTypes(parsed);
-        alert("India preferences refreshed from local cache!");
+        
+        const watchlistSymbols = watchlist.map(item => item.base_symbol);
+        
+        if (parsed.includes("Momentum Riders (52-week High/Low, All-Time High/Low)")) {
+          console.log("Refreshing Momentum alerts from localStorage...");
+          const momentumAlertsData = await fetchMomentumAlerts();
+          
+          const watchlistOnlyAlerts = momentumAlertsData.filter(alert => 
+            watchlistSymbols.includes(alert.stock)
+          );
+          
+          const sortedAlerts = watchlistOnlyAlerts.sort((a, b) => 
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+          
+          const latestAlerts = sortedAlerts.slice(0, 10);
+          const remainingAlerts = sortedAlerts.slice(10);
+          
+          const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
+            const date = alert.date;
+            if (!groups[date]) {
+              groups[date] = [];
+            }
+            groups[date].push(alert);
+            return groups;
+          }, {});
+          
+          const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
+            .map(([date, alerts]) => ({ date, alerts }))
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          
+          setAlertsData(latestAlerts);
+          setArchivedAlerts(archivedAlertsArray);
+          alert(`Refreshed! Found ${watchlistOnlyAlerts.length} alerts for your watchlist, showing latest 10`);
+        } else {
+          const filteredAlerts = hardcodedAlerts.filter(alert => 
+            parsed.includes(alert.type)
+          );
+          
+          const sortedAlerts = filteredAlerts.sort((a, b) => 
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+          
+          const watchlistOnlyAlerts = sortedAlerts.filter(alert => 
+            watchlistSymbols.includes(alert.stock)
+          );
+          
+          const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
+          const remainingAlerts = watchlistOnlyAlerts.slice(10);
+          
+          const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
+            const date = alert.date;
+            if (!groups[date]) {
+              groups[date] = [];
+            }
+            groups[date].push(alert);
+            return groups;
+          }, {});
+          
+          const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
+            .map(([date, alerts]) => ({ date, alerts }))
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          
+          setAlertsData(latestAlerts);
+          setArchivedAlerts(archivedAlertsArray);
+          alert(`Refreshed! Found ${watchlistOnlyAlerts.length} alerts for your watchlist, showing latest 10`);
+        }
       } else {
         alert("No India preferences found");
       }
@@ -450,17 +1399,69 @@ export default function Live_Alerts_India() {
     }
   };
 
-  // Add to watchlist function
-  const addToWatchlist = () => {
-    if (stockInput && !watchlist.includes(stockInput.toUpperCase())) {
-      setWatchlist([...watchlist, stockInput.toUpperCase()]);
-      setStockInput("");
-    }
+  // Handle archived alert click
+  const handleArchivedAlertClick = (dateIndex: number, alertIndex: number) => {
+    const alertKey = `${dateIndex}-${alertIndex}`;
+    setExpandedArchivedAlert(expandedArchivedAlert === alertKey ? null : alertKey);
   };
 
-  // Toggle alert details
-  const toggleAlertDetails = (index: number) => {
-    setExpandedAlertIndex(expandedAlertIndex === index ? null : index);
+  // Handle view all archived alerts
+  const handleViewAllArchived = () => {
+    const allArchivedAlerts = filteredArchiveGroups.flatMap(group => 
+      group.alerts.map((alert: any) => ({
+        stock: alert.stock || 'N/A',
+        type: alert.type || 'N/A',
+        price: alert.price || '₹0.00',
+        change: alert.change || '0%',
+        rsi: alert.rsi || '50',
+        rsiStatus: alert.rsiStatus || 'NEUTRAL',
+        news: alert.news || '#',
+        chart: alert.chart || '#',
+        time: alert.time || 'N/A',
+        strategy: alert.strategy || 'N/A',
+        date: alert.date || group.date || new Date().toISOString().split('T')[0],
+        description: alert.description || 'No description available.',
+        marketCap: alert.marketCap || 'N/A',
+        timestamp: alert.timestamp || new Date().toISOString()
+      }))
+    );
+    
+    setSelectedArchivedAlert({
+      type: 'all',
+      alerts: allArchivedAlerts
+    });
+    setShowArchivedDetails(true);
+  };
+
+  // Close archived details
+  const handleCloseArchivedDetails = () => {
+    setShowArchivedDetails(false);
+    setSelectedArchivedAlert(null);
+  };
+
+  // Get paginated archived alerts
+  const getPaginatedArchivedAlerts = () => {
+    const allAlerts = filteredArchiveGroups.flatMap(group => group.alerts);
+    
+    const sortedAlerts = allAlerts.sort((a, b) => 
+      new Date(b.date || b.timestamp || 0).getTime() - new Date(a.date || a.timestamp || 0).getTime()
+    );
+    
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentItems = sortedAlerts.slice(indexOfFirstItem, indexOfLastItem);
+    const totalPages = Math.ceil(sortedAlerts.length / itemsPerPage);
+    
+    return {
+      currentItems,
+      totalPages,
+      totalAlerts: sortedAlerts.length
+    };
+  };
+
+  // Handle page change
+  const handlePageChange = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
   };
 
   // Get RSI status color
@@ -482,15 +1483,17 @@ export default function Live_Alerts_India() {
       default: return "bg-slate-500/20";
     }
   };
-  
-  // SIMPLE Telegram subscribe function - NO PERSISTENCE
+
+  // India Telegram subscribe function
   const handleTelegramSubscribe = () => {
-    alert("Telegram will open. Please click START in the bot to subscribe.");
-    console.log("Telegram button clicked");
+    alert("Telegram will open. Please click START in the bot to subscribe for India alerts.");
     window.open("https://t.me/AIFinverseIndbot?start=subscribe_india", "_blank");
   };
 
-  // Show loading while data loads
+  if (!isRegistered) {
+    return null;
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
@@ -550,15 +1553,16 @@ export default function Live_Alerts_India() {
             </div>
             <div className="text-left">
               <h1 className="text-3xl md:text-4xl font-bold">India Live Alerts</h1>
+              <p className="text-slate-400">Real-time alerts for Indian market stocks</p>
             </div>
           </div>
         </section>
 
-        {/* MAIN CONTENT */}
+        {/* MAIN CONTENT - EXACT SAME LAYOUT AS US PAGE */}
         <div className="grid grid-cols-12 gap-6">
           {/* LEFT SIDEBAR */}
           <aside className="col-span-12 md:col-span-3 space-y-6">
-            {/* ALERT TYPES SECTION */}
+            {/* ALERT TYPES SECTION - EXACT SAME AS US */}
             <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 border border-slate-700 rounded-2xl p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-lg">Active Alert Types</h3>
@@ -580,9 +1584,7 @@ export default function Live_Alerts_India() {
                 <div className="text-center py-6">
                   <Target className="w-10 h-10 text-slate-500 mx-auto mb-3" />
                   <p className="text-sm text-slate-400">No alert types selected</p>
-                  {userMarket && (userMarket === 'India' || userMarket === 'Both') && (
-                    <p className="text-xs text-slate-500 mt-1">Add strategies below to get India alerts</p>
-                  )}
+                  <p className="text-xs text-slate-500 mt-1">Add strategies below to get India alerts</p>
                 </div>
               ) : (
                 <>
@@ -621,7 +1623,7 @@ export default function Live_Alerts_India() {
               )}
             </div>
 
-            {/* ADD STRATEGIES SECTION */}
+            {/* ADD STRATEGIES SECTION - EXACT SAME AS US (only color changed) */}
             <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 border border-slate-700 rounded-2xl p-5 space-y-4">
               {!showAddStrategies ? (
                 <>
@@ -636,7 +1638,7 @@ export default function Live_Alerts_India() {
                   {selectedAlertTypes.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-slate-700">
                       <p className="text-xs text-slate-400 text-center">
-                        These strategies apply to INDIA market only
+                        These strategies apply to India market only
                       </p>
                     </div>
                   )}
@@ -667,7 +1669,6 @@ export default function Live_Alerts_India() {
                             }`}
                           >
                             <div className="flex items-center gap-3">
-                              {/* Consistent checkbox size with flex-shrink-0 */}
                               <div className={`w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 ${
                                 selectedNewStrategies.includes(strategy)
                                   ? "border-cyan-500 bg-cyan-500"
@@ -721,54 +1722,141 @@ export default function Live_Alerts_India() {
               )}
             </div>
 
-            {/* ARCHIVED ALERTS */}
+            {/* ARCHIVED ALERTS - WITH SEARCH - EXACT SAME AS US */}
             <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 border border-slate-700 rounded-2xl p-5">
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold text-lg">Archived Alerts</h3>
-                  <span className="text-xs bg-slate-500/20 text-slate-400 px-2 py-1 rounded-full">
-                    COMING SOON
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full">
+                      {filteredArchiveGroups.reduce((total, group) => total + group.alerts.length, 0)} alerts
+                    </span>
+                    {filteredArchiveGroups.length > 0 && (
+                      <Button
+                        onClick={handleViewAllArchived}
+                        className="text-xs bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 px-2 py-1 rounded-full"
+                      >
+                        View All
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <p className="text-sm text-slate-400 bg-slate-800/50 p-2 rounded">12 Sep 2025</p>
-                  <p className="text-sm text-slate-400 bg-slate-800/50 p-2 rounded">11 Sep 2025</p>
-                  <p className="text-sm text-slate-400 bg-slate-800/50 p-2 rounded">10 Sep 2025</p>
+                
+                {/* Archive Search Bar */}
+                <div className="mb-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search"
+                      value={archiveSearchQuery}
+                      onChange={(e) => setArchiveSearchQuery(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-10 pr-8 py-2 focus:border-cyan-500 focus:outline-none text-sm"
+                    />
+                    {archiveSearchQuery && (
+                      <button
+                        onClick={clearArchiveSearch}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-white"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  {archiveSearchQuery && (
+                    <p className="text-xs text-cyan-400 mt-2">
+                      Showing alerts for "{archiveSearchQuery}" in your watchlist
+                    </p>
+                  )}
                 </div>
+                
+                {/* Archive Groups - Only show dates */}
+                {filteredArchiveGroups.length === 0 ? (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-slate-400">
+                      {watchlist.length === 0 
+                        ? 'Add stocks to your watchlist to see archived alerts'
+                        : archiveSearchQuery 
+                          ? 'No alerts found for this symbol in your watchlist'
+                          : 'No archived alerts for your watchlist stocks'}
+                    </p>
+                    {archiveSearchQuery && watchlist.length > 0 && (
+                      <p className="text-xs text-slate-500 mt-1">Try a different symbol</p>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-3 max-h-80 overflow-y-auto">
+                      {filteredArchiveGroups.slice(0, 7).map((group, dateIndex) => (
+                        <div key={dateIndex} className="space-y-2">
+                          <button
+                            onClick={() => handleArchiveDateClick(group.date, group.alerts)}
+                            className="w-full flex items-center justify-between p-3 bg-slate-800/50 hover:bg-slate-800 rounded-lg transition-colors"
+                          >
+                            <span className="text-sm font-medium text-cyan-400">
+                              {formatArchiveDate(group.date)}
+                            </span>
+                            <span className="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded">
+                              {group.alerts.length}
+                            </span>
+                          </button>
+                        </div>
+                      ))}
+                      
+                      {filteredArchiveGroups.length > 7 && (
+                        <p className="text-xs text-center text-slate-500 pt-2">
+                          + {filteredArchiveGroups.length - 7} more days
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </aside>
 
-          {/* CENTER ALERTS */}
+          {/* CENTER ALERTS - SHOW ONLY LATEST 10 ALERTS (NO "NO ACTIVITY" CARDS) - EXACT SAME AS US */}
           <section className="col-span-12 md:col-span-6 space-y-6">
             <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 border border-slate-700 rounded-2xl p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-bold">Live India Market Alerts</h2>
-                  <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-1 rounded-full">
-                    COMING SOON
-                  </span>
+                  <h2 className="text-xl font-bold">
+                    {watchlist.length > 0 
+                      ? 'Your Watchlist Alerts'
+                      : 'Your Watchlist Alerts'}
+                  </h2>
+                  {watchlist.length > 0 && (
+                    <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full">
+                      {filteredAlerts.length} alert{filteredAlerts.length !== 1 ? 's' : ''} today
+                    </span>
+                  )}
                 </div>
-                <span className="text-xs bg-green-500/20 text-green-400 px-3 py-1 rounded-full">
-                  Real-time
-                </span>
               </div>
 
-              {filteredAlerts.length === 0 ? (
+              {watchlist.length === 0 ? (
+                <div className="text-center py-10">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-slate-800/50 rounded-full flex items-center justify-center">
+                    <Star className="w-8 h-8 text-slate-500" />
+                  </div>
+                  <p className="text-slate-400 mb-2">No stocks in watchlist</p>
+                  <p className="text-sm text-slate-500">
+                    Create watchlist to get personalised alerts
+                  </p>
+                </div>
+              ) : filteredAlerts.length === 0 ? (
                 <div className="text-center py-10">
                   <div className="w-16 h-16 mx-auto mb-4 bg-slate-800/50 rounded-full flex items-center justify-center">
                     <Target className="w-8 h-8 text-slate-500" />
                   </div>
-                  <p className="text-slate-400">
-                    {selectedAlertTypes.length === 0 
-                      ? "No alert types selected. Add strategies to see alerts." 
-                      : "No alerts matching your preferences"}
+                  <p className="text-slate-400 mb-2">No alerts for your watchlist</p>
+                  <p className="text-sm text-slate-500">
+                    Check back later or try refreshing
                   </p>
-                  <p className="text-sm text-slate-500 mt-2">
-                    {selectedAlertTypes.length === 0
-                      ? "Go to 'Add More Strategies' to get started"
-                      : "Try adjusting your preferences or check back later"}
-                  </p>
+                  <Button
+                    onClick={handleRefresh}
+                    className="mt-4 bg-slate-700 hover:bg-slate-600 text-white text-sm px-4 py-2 rounded-lg"
+                  >
+                    ↻ Refresh
+                  </Button>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -779,7 +1867,7 @@ export default function Live_Alerts_India() {
                     >
                       <div 
                         className="p-5 flex justify-between items-center cursor-pointer"
-                        onClick={() => toggleAlertDetails(index)}
+                        onClick={() => setExpandedAlertIndex(expandedAlertIndex === index ? null : index)}
                       >
                         <div>
                           <div className="flex items-center gap-3 mb-1">
@@ -807,11 +1895,11 @@ export default function Live_Alerts_India() {
                       {expandedAlertIndex === index && (
                         <div className="px-5 pb-5 border-t border-slate-700 pt-4 animate-fadeIn">
                           <div className="mb-4">
-                            <h4 className="font-bold text-lg mb-2">ALERT STRATEGY: {alert.strategy}</h4>
+                            <h4 className="font-bold text-lg mb-3">ALERT STRATEGY: {alert.strategy}</h4>
                             <div className="grid grid-cols-2 gap-4">
                               <div className="bg-slate-800/50 p-3 rounded-lg">
-                                <p className="text-xs text-slate-400 mb-1">Stock: {alert.stock} (INDIA)</p>
-                                <p className="text-xl font-bold">₹{alert.price}</p>
+                                <p className="text-xs text-slate-400 mb-1">Stock: {alert.stock} (India)</p>
+                                <p className="text-xl font-bold">{alert.price}</p>
                                 <p className={`text-sm ${alert.change.startsWith('+') ? 'text-green-400' : 'text-red-400'}`}>
                                   {alert.change}
                                 </p>
@@ -831,9 +1919,9 @@ export default function Live_Alerts_India() {
                           </div>
 
                           <div className="mb-4">
-                            <p className="font-medium mb-2">News:</p>
-                            <p className="text-sm text-slate-400 bg-slate-800/30 p-3 rounded">
-                              No fresh news found.
+                            <p className="font-medium mb-2">Analysis:</p>
+                            <p className="text-sm text-slate-300 bg-slate-800/30 p-3 rounded">
+                              {alert.description || "No analysis available."}
                             </p>
                           </div>
 
@@ -873,9 +1961,83 @@ export default function Live_Alerts_India() {
             </div>
           </section>
 
-          {/* RIGHT SIDEBAR - SIMPLE TELEGRAM */}
+          {/* RIGHT SIDEBAR - EXACT SAME AS US */}
           <aside className="col-span-12 md:col-span-3 space-y-6">
-            {/* TELEGRAM SECTION */}
+            {/* WATCHLIST SECTION - FIXED: Restored content */}
+            <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 border border-slate-700 rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-lg">Your Watchlist</h3>
+                <span className="text-xs text-slate-500">{watchlist.length}/20</span>
+              </div>
+              
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search"
+                    value={searchAlertQuery}
+                    onChange={(e) => setSearchAlertQuery(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-10 pr-3 py-2 focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <Button 
+                onClick={() => setShowStockList(true)}
+                className="w-full bg-gradient-to-r from-green-500 to-cyan-600 hover:from-green-600 hover:to-cyan-700 text-black font-semibold mb-6"
+              >
+                <Plus className="w-4 h-4 mr-2" /> Add Stocks
+              </Button>
+
+              {/* Watchlist Items - FIXED: Restored content */}
+              <div 
+                className="space-y-2 overflow-y-auto pr-1" 
+                style={{ 
+                  maxHeight: watchlist.length > 6 ? '400px' : 'auto',
+                  transition: 'max-height 0.3s ease'
+                }}
+              >
+                {watchlist.length === 0 ? (
+                  <div className="text-center py-8 opacity-50">
+                    <Star className="w-8 h-8 text-slate-500 mx-auto mb-2" />
+                    <p className="text-xs text-slate-400">No stocks in watchlist</p>
+                    <p className="text-xs text-slate-500 mt-1">Add up to 20 India stocks</p>
+                  </div>
+                ) : (
+                  watchlist
+                    .filter(stock => 
+                      searchAlertQuery === "" || 
+                      stock.company_name.toLowerCase().includes(searchAlertQuery.toLowerCase()) ||
+                      stock.base_symbol.toLowerCase().includes(searchAlertQuery.toLowerCase())
+                    )
+                    .map(stock => {
+                      const hasAlert = alertsData.some(alert => alert.stock === stock.base_symbol);
+                      return (
+                        <div 
+                          key={stock.base_symbol} 
+                          
+                        >
+                          <div className="flex-1 min-w-0">
+                            
+                          </div>
+                          
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+              
+              {watchlist.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-slate-700">
+                  <p className="text-xs text-slate-400 text-center">
+                    {watchlist.length} of 20 stocks added
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* TELEGRAM & SUBSCRIBE SECTION - EXACT SAME AS US WITH INDIA BOT */}
             <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 border border-slate-700 rounded-2xl p-5">
               <div className="text-center mb-6">
                 <div className="w-16 h-16 mx-auto mb-3 bg-gradient-to-br from-green-500/20 to-teal-500/20 rounded-full flex items-center justify-center">
@@ -885,43 +2047,302 @@ export default function Live_Alerts_India() {
                     className="w-10 h-10"
                   />
                 </div>
-                <h3 className="font-bold text-lg">Telegram Alerts</h3>
-                <p className="text-sm text-slate-400 mt-1">Get instant alerts on Telegram</p>
+                <h3 className="font-semibold text-lg mb-1">Subscribe to Alerts</h3>
+                <p className="text-sm text-slate-400">Get instant notifications via Telegram</p>
               </div>
 
-              <Button
-                onClick={handleTelegramSubscribe}
-                className="w-full bg-gradient-to-r from-green-500 to-cyan-600 hover:from-green-600 hover:to-cyan-700 py-6 text-lg font-bold"
-              >
-                Subscribe to Telegram
-              </Button>
+              <div className="space-y-3">
+                <Button
+                  onClick={handleTelegramSubscribe}
+                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 py-3 text-m text-black font-bold flex items-center justify-center"
+                >
+                  <div className="flex items-center gap-2">
+                    Market Alerts
+                  </div>
+                </Button>
+                
+                <Button
+      onClick={async () => {
+        try {
+          // First open Telegram bot
+          window.open("https://t.me/AIFinverseWatchlistBot?start=start", "_blank");
+          
+          // Get user ID from localStorage
+          const userProfile = localStorage.getItem("userProfile");
+          const userId = userProfile ? JSON.parse(userProfile).userId : null;
+          
+          if (!userId) {
+            console.error("No user ID found");
+            return;
+          }
 
-              <p className="text-xs text-slate-500 mt-2 text-center">
-                Subscription is completed inside Telegram
+          // Call the webhook API with the user ID in the request body
+          const response = await fetch('https://api.aifinverse.com/telegram/webhook/watchlist', {
+            method: 'POST',
+            headers: {
+              'accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ id: userId })
+          });
+
+          if (response.ok) {
+            console.log("✅ Watchlist alert subscription registered");
+          } else {
+            console.error("Failed to register watchlist subscription");
+          }
+        } catch (error) {
+          console.error("Error calling watchlist webhook:", error);
+        }
+      }}
+                  className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 py-3 text-m text-black font-bold flex items-center justify-center"
+                >
+                  <div className="flex items-center gap-2">
+                    Watchlist Alerts
+                  </div>
+                </Button>
+              </div>
+              <p className="text-xs text-slate-400 text-center mt-2">
+                Activation is completed inside Telegram
               </p>
-            </div>
-
-            {/* WATCHLIST */}
-            <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 border border-slate-700 rounded-2xl p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-lg">Create Watchlist</h3>
-              </div>
-              <input
-                placeholder="Coming soon..."
-                disabled
-                className="w-full p-3 rounded-lg bg-slate-800/50 text-slate-400 cursor-not-allowed border border-slate-700"
-              />
-              <Button
-                disabled
-                className="w-full mt-3 bg-gradient-to-r from-green-500/80 to-blue-400/80 opacity-60 cursor-not-allowed hover:from-green-500/60 hover:to-blue-600/60 font-semibold"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Stock
-              </Button>
             </div>
           </aside>
         </div>
       </main>
+
+      {/* STOCK SELECTION MODAL - EXACT SAME AS US */}
+      {showStockList && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 w-full max-w-2xl max-h-[80vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+            <div className="p-5 border-b border-slate-700 flex justify-between items-center">
+              <div>
+                <h3 className="font-bold text-lg">Add Stocks</h3>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowStockList(false);
+                  setSearchQuery("");
+                  setSelectedStocks([]);
+                }}
+                className="text-slate-400 hover:text-white transition"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="p-5 border-b border-slate-700">
+              <input 
+                autoFocus
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 mb-2 focus:border-cyan-500 focus:outline-none"
+                placeholder="Search Company / Symbol..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-5">
+              {filteredStocks.length === 0 ? (
+                <div className="text-center py-8">
+                  <Search className="w-12 h-12 text-slate-500 mx-auto mb-3" />
+                  <p className="text-slate-400">No stocks found</p>
+                  <p className="text-sm text-slate-500">Try a different search term</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {filteredStocks.map(stock => {
+                    const inWatchlist = watchlist.some(item => item.company_name === stock.company_name);
+                    const isSelected = selectedStocks.includes(stock.company_name);
+                    
+                    return (
+                      <div 
+                        key={stock.base_symbol}
+                        onClick={() => !inWatchlist && toggleStockSelection(stock.company_name)}
+                        className={`p-3 rounded-xl cursor-pointer transition-all border ${
+                          inWatchlist 
+                            ? "bg-slate-900/50 opacity-50 cursor-not-allowed border-slate-700" 
+                            : isSelected
+                            ? "bg-cyan-500/20 border-cyan-500/40"
+                            : "bg-slate-800/50 border-slate-700 hover:bg-slate-800"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-cyan-400 truncate">{stock.base_symbol}</p>
+                            <p className="text-xs text-slate-400 truncate">{stock.company_name}</p>
+                          </div>
+                          <div className="ml-2">
+                            {inWatchlist ? (
+                              <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded">
+                                Added
+                              </span>
+                            ) : isSelected ? (
+                              <div className="w-5 h-5 bg-cyan-500 rounded flex items-center justify-center">
+                                <Check className="w-3 h-3 text-white" />
+                              </div>
+                            ) : (
+                              <div className="w-5 h-5 border border-slate-500 rounded"></div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            
+            <div className="p-5 border-t border-slate-700">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-sm">
+                    Selected: <span className="font-bold text-cyan-400">{selectedStocks.length}</span> stocks
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Total after add: {watchlist.length + selectedStocks.length}/20
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => {
+                      setSelectedStocks([]);
+                      setSearchQuery("");
+                    }}
+                    variant="outline"
+                    className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                  >
+                    Clear
+                  </Button>
+                  <Button
+                    onClick={handleAddStocks}
+                    disabled={selectedStocks.length === 0}
+                    className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600"
+                  >
+                    Add {selectedStocks.length} Stock(s)
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ARCHIVED ALERT DETAILS MODAL - EXACT SAME STYLE AS CENTER ALERT EXPANDED VIEW */}
+      {showArchivedDetails && selectedArchivedAlert && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md overflow-y-auto">
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 w-full max-w-4xl max-h-[90vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+            <div className="p-5 border-b border-slate-700 flex justify-between items-center sticky top-0 bg-slate-900 z-10">
+              <div>
+                <h3 className="font-bold text-xl text-cyan-400">
+                  {selectedArchivedAlert.type === 'date' 
+                    ? formatArchiveDate(selectedArchivedAlert.date)
+                    : `Watchlist Archive ${archiveSearchQuery ? `- "${archiveSearchQuery}"` : ''}`}
+                </h3>
+                <p className="text-sm text-slate-400 mt-1">
+                  {selectedArchivedAlert.alerts.length} alert{selectedArchivedAlert.alerts.length !== 1 ? 's' : ''} from your watchlist
+                </p>
+              </div>
+              <button 
+                onClick={handleCloseArchivedDetails}
+                className="text-slate-400 hover:text-white transition p-2 hover:bg-slate-700 rounded-full"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="space-y-4">
+                {selectedArchivedAlert.alerts.map((alert: any, index: number) => (
+                  <div 
+                    key={index}
+                    className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-700 rounded-xl hover:border-cyan-500/30 hover:shadow-lg transition-all duration-300 group overflow-hidden"
+                  >
+                    <div className="p-5">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="font-bold text-xl text-cyan-400">{alert.stock}</span>
+                            <span className="text-xs bg-slate-700 px-2 py-1 rounded">NSE</span>
+                          </div>
+                          <h4 className="font-bold text-lg mb-3">ALERT STRATEGY: {alert.strategy}</h4>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-cyan-400 font-medium">{alert.type}</span>
+                          <p className="text-xs text-slate-400 mt-1">{alert.date} • {alert.time}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="bg-slate-800/50 p-3 rounded-lg">
+                          <p className="text-xs text-slate-400 mb-1">Stock: {alert.stock} (India)</p>
+                          <p className="text-xl font-bold">{alert.price}</p>
+                          <p className={`text-sm ${alert.change.startsWith('+') ? 'text-green-400' : 'text-red-400'}`}>
+                            {alert.change}
+                          </p>
+                        </div>
+                        
+                        <div className="bg-slate-800/50 p-3 rounded-lg">
+                          <p className="text-xs text-slate-400 mb-1">RSI</p>
+                          <div className="flex items-center justify-between">
+                            <p className="text-xl font-bold">{alert.rsi}</p>
+                            <span className={`text-xs px-2 py-1 rounded ${getRsiBgColor(alert.rsiStatus)} ${getRsiColor(alert.rsiStatus)}`}>
+                              {alert.rsiStatus}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-1">Relative Strength Index</p>
+                        </div>
+                      </div>
+
+                      <div className="mb-4">
+                        <p className="font-medium mb-2">Analysis:</p>
+                        <p className="text-sm text-slate-300 bg-slate-800/30 p-3 rounded">
+                          {alert.description || "No analysis available."}
+                        </p>
+                      </div>
+
+                      <div className="space-y-3">
+                        <a
+                          href={alert.chart}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-cyan-400 hover:text-cyan-300 transition-colors"
+                        >
+                          <BarChart className="w-4 h-4" />
+                          <span className="text-sm font-medium">TradingView Chart</span>
+                          <ExternalLink className="w-3 h-3 ml-auto" />
+                        </a>
+                        
+                        <a
+                          href={alert.news}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-cyan-400 hover:text-cyan-300 transition-colors"
+                        >
+                          <Newspaper className="w-4 h-4" />
+                          <span className="text-sm font-medium">Latest News & Analysis</span>
+                          <ExternalLink className="w-3 h-3 ml-auto" />
+                        </a>
+                      </div>
+
+                      <div className="mt-4 pt-4 border-t border-slate-700 text-xs text-slate-500">
+                        <p>{alert.time} • Forwarded from Finyersems</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <div className="p-5 border-t border-slate-700 flex justify-end bg-slate-900 sticky bottom-0">
+              <Button
+                onClick={handleCloseArchivedDetails}
+                className="bg-gradient-to-r from-cyan-500 to-blue-500 text-black font-semibold hover:from-cyan-600 hover:to-blue-600"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* FLOATING AI BOT */}
       <button
@@ -936,7 +2357,7 @@ export default function Live_Alerts_India() {
         />
       </button>
 
-      {/* CHAT BOX */}
+      {/* CHAT BOX - EXACT SAME AS US */}
       {chatOpen && (
         <div className="fixed bottom-24 right-6 w-80 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 shadow-2xl z-50 border border-cyan-500/20">
           <div className="flex items-center justify-between mb-4">
@@ -989,10 +2410,9 @@ export default function Live_Alerts_India() {
         </div>
       )}
 
-      {/* ================= FOOTER ================= */}
+      {/* FOOTER - EXACT SAME AS US */}
       <footer className="mt-20 py-4 bg-slate-1000/50 text-center text-sm text-slate-500">
         <div className="max-w-7xl mx-auto px-2 py-1 text-center">
-          {/* DISCLAIMER */}
           <div className="mb-4">
             <p className="text-sm text-red-300 font-semibold">
               ⚠️ Disclaimer - Not Financial Advice, Do Your Own Research

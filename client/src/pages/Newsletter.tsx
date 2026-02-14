@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import PageWrapper from "@/components/PageWrapper";
@@ -11,13 +11,40 @@ import {
 } from "lucide-react";
 import { api } from "@/services/api";
 
-
+const ARTICLE_AI = "ai-giveth";
 const ARTICLE_INDIA = "india-markets";
 const ARTICLE_GAS = "widowmaker";
 const ARTICLE_YEAR = "year-review";
 const ARTICLE_ALT = "altseason";
-  // Natural Gas article
-  // Market Insight article
+
+// THIS IS THE KEY PART - Handle sharing at the top level
+// THIS IS THE KEY PART - Handle sharing at the top level
+if (typeof window !== 'undefined') {
+  // Check if this is the newsletter page with share parameter
+  if (window.location.pathname === '/newsletter') {
+    const searchParams = new URLSearchParams(window.location.search);
+    const shareArticle = searchParams.get('share');
+    
+    if (shareArticle) {
+      console.log("📤 Share parameter detected:", shareArticle);
+      
+      // Store the article
+      sessionStorage.setItem('newsletter_article', shareArticle);
+      localStorage.setItem('newsletter_article', shareArticle);
+      document.cookie = `newsletter_article=${shareArticle}; path=/; max-age=60`;
+      
+      console.log("✅ Stored in sessionStorage:", sessionStorage.getItem('newsletter_article'));
+      
+      // IMPORTANT: Remove the share parameter from URL without reloading
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+      
+      // Don't redirect - we're already on the right page!
+      // Just let the component render normally
+    }
+  }
+}
+
 
 export default function Newsletter() {
   const [email, setEmail] = useState("");
@@ -27,25 +54,35 @@ export default function Newsletter() {
   const [expandedArticle1, setExpandedArticle1] = useState(false);
   const [expandedArticle2, setExpandedArticle2] = useState(false);
   const [expandedArticle3, setExpandedArticle3] = useState(false);
-  const [expandedArticle4, setExpandedArticle4] = useState(false); 
+  const [expandedArticle4, setExpandedArticle4] = useState(false);
+  const [expandedArticle5, setExpandedArticle5] = useState(false);  
   const [hoveredImage, setHoveredImage] = useState<string | null>(null);
   const [hoveredVideo, setHoveredVideo] = useState(false);
   const [isSharedView, setIsSharedView] = useState(false);
   const [isSubscribing, setIsSubscribing] = useState(false);
 
-  const getShareLinks = (article: string) => {
-    const shareUrl = `https://aifinverse.com/newsletter?article=${article}`;
-    const message = `Check out this market insight article 👇\n\n${shareUrl}`;
+  const [showEmptyMessage, setShowEmptyMessage] = useState(false);
 
-    return {
-      whatsapp: `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`,
-      telegram: `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(
-        "Check out this market insight article"
-      )}`,
-      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`,
-      copy: shareUrl,
-    };
+  const hasProcessed = useRef(false);
+
+  const getShareLinks = (article: string) => {
+  const baseUrl = process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:3000' 
+    : 'https://aifinverse.com';
+  
+  // Use newsletter page with share parameter
+  const shareUrl = `${baseUrl}/newsletter?share=${encodeURIComponent(article)}`;
+  const message = `Check out this market insight article 👇\n\n${shareUrl}`;
+  const encodedMessage = encodeURIComponent(message);
+
+  return {
+    whatsapp: `https://api.whatsapp.com/send?text=${encodedMessage}`,
+    telegram: `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent("Check out this market insight article")}`,
+    linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`,
+    copy: shareUrl,
   };
+};
+
 
   // Close share panel when clicking outside
   useEffect(() => {
@@ -67,50 +104,79 @@ export default function Newsletter() {
     };
   }, [showShare]);
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const article = params.get("article");
+ 
+useEffect(() => {
+  // Log everything at the start
+  console.log("📋 NEWSLETTER PAGE - Starting check");
+  console.log("📋 Current URL:", window.location.href);
+  console.log("📋 Search params:", window.location.search);
+  
+  // Try multiple sources
+  const urlArticle = new URLSearchParams(window.location.search).get("article");
+  const sessionArticle = sessionStorage.getItem('newsletter_article');
+  const localArticle = localStorage.getItem('newsletter_article');
+  
+  // Get cookie
+  const cookieMatch = document.cookie.match(/newsletter_article=([^;]+)/);
+  const cookieArticle = cookieMatch ? cookieMatch[1] : null;
 
-    console.log("🔍 DEBUG: URL Article Parameter:", article);
-    console.log("🔍 DEBUG: isSharedView will be:", !!article);
+  console.log("📋 All sources:");
+  console.log("  - URL param:", urlArticle);
+  console.log("  - sessionStorage:", sessionArticle);
+  console.log("  - localStorage:", localArticle);
+  console.log("  - cookie:", cookieArticle);
 
-    if (article) {
-      setIsSharedView(true);
+  // Use the first available article
+  const article = urlArticle || sessionArticle || localArticle || cookieArticle;
+  console.log("✅ Using article:", article);
 
-      // Log which article state will be set
-      console.log("🔍 DEBUG: Collapsing ALL articles first");
-      setExpandedArticle1(false);
-      setExpandedArticle2(false);
-      setExpandedArticle3(false);
-      setExpandedArticle4(false);
-      
-      // Then, expand ONLY the requested article
-      if (article === "india-markets") {
-        console.log("Expanding Article 1 (India Markets)");
-        setExpandedArticle1(true);
-      } else if (article === "widowmaker") {
-        console.log("Expanding Article 2 (Widowmaker)");
-        setExpandedArticle2(true);
-      } else if (article === "year-review") {
-        console.log("Expanding Article 3 (Year Review)");
-        setExpandedArticle3(true);
-      } else if (article === "altseason") {
-        console.log("Expanding Article 4 (Altseason)");
-        setExpandedArticle4(true);
-      } else {
-        console.warn("Unknown article ID:", article);
-        // Optionally, expand the first article as fallback
-        setExpandedArticle4(true);
-      }
+  // Clear storage after reading
+  if (!urlArticle) {
+    sessionStorage.removeItem('newsletter_article');
+    localStorage.removeItem('newsletter_article');
+    document.cookie = 'newsletter_article=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT';
+  }
+
+  if (article && !hasProcessed.current) {
+    console.log("🎯 Expanding article:", article);
+    hasProcessed.current = true;
+    setIsSharedView(true);
+
+    // Collapse all first
+    setExpandedArticle1(false);
+    setExpandedArticle2(false);
+    setExpandedArticle3(false);
+    setExpandedArticle4(false);
+    setExpandedArticle5(false);
+    
+    // Expand the correct one
+    if (article === "ai-giveth") {
+      console.log("Expanding Article 1");
+      setExpandedArticle1(true);
+    } else if (article === "india-markets") {
+      console.log("Expanding Article 2");
+      setExpandedArticle2(true);
+    } else if (article === "widowmaker") {
+      console.log("Expanding Article 3");
+      setExpandedArticle3(true);
+    } else if (article === "year-review") {
+      console.log("Expanding Article 4");
+      setExpandedArticle4(true);
+    } else if (article === "altseason") {
+      console.log("Expanding Article 5");
+      setExpandedArticle5(true);
     } else {
-      setIsSharedView(false);
-      // When no article parameter, show collapsed view
-      setExpandedArticle1(false);
-      setExpandedArticle2(false);
-      setExpandedArticle3(false);
-      setExpandedArticle4(false);
+      console.log("Unknown article, expanding Article 1");
+      setExpandedArticle1(true);
     }
-  }, []); // Remove window.location.search dependency
+  } else {
+    console.log("📋 No article to expand or already processed");
+  }
+}, []);
+  
+  
+
+
 
   const handleSubscribe = async () => {
     // Validation
@@ -257,17 +323,388 @@ export default function Newsletter() {
           {/*------------------   ARTICLES ------------------  */}
       
           {isSharedView && (
-            <div className="mb-6">
-              <a
-                href="/newsletter"
-                className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-cyan-400 font-medium transition-all duration-200"
-              >
-                ← Back to All Articles
-              </a>
+  <div className="mb-6">
+    <a
+      href="/newsletter"
+      className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-cyan-400 font-medium transition-all duration-200"
+    >
+      ← Back to All Articles
+    </a>
+  </div>
+)}
+
+
+          {/* ARTICLE 1 - AI GIVETH AND TAKETH */}
+          {(!isSharedView || expandedArticle1) && (
+  
+
+          <section id="ai-giveth" className="mb-16">
+            <div className="p-6 bg-slate-800/60 border border-slate-700/50 rounded-xl backdrop-blur-sm">
+              <div className="flex items-center gap-4 text-sm text-gray-400 mb-6 flex-wrap border-b border-slate-700/50 pb-4">
+                <span className="flex items-center gap-1.5">
+                  <span className="text-lg">📅</span>
+                  <span>4 February 2026</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="text-lg">⏱</span>
+                  <span>5 min read</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="text-lg">✍️</span>
+                  <span className="text-cyan-300">AI Market Analysis</span>
+                </span>
+                <span className="ml-auto flex items-center gap-2">
+                  {/* Share Button */}
+                  <div className="relative">
+                    <button 
+                      onClick={(e) => handleShareClick("ai-giveth", e)}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 rounded-lg text-gray-300 text-xs transition-all duration-200"
+                    >
+                      <Share2 size={12} />
+                      Share
+                    </button>
+                    
+                    {/* Share Options Panel */}
+                    {showShare === "ai-giveth" && (
+                      <div 
+                        className="absolute right-0 top-8 z-50"
+                        onClick={handleShareOptionClick}
+                      >
+                        <div className="bg-slate-900 border border-slate-700 rounded-lg p-2 shadow-xl min-w-[140px]">
+                          <h4 className="text-white font-semibold text-xs mb-2">Share Article</h4>
+                          
+                          <div className="space-y-1">
+                            <a
+                              href={getShareLinks("ai-giveth").whatsapp}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={handleShareOptionClick}
+                              className="flex items-center gap-2 px-2 py-1.5 bg-emerald-900/20 border border-emerald-800/30 rounded text-emerald-300 text-xs hover:bg-emerald-900/30 transition-colors"
+                            >
+                              <img src="/images/whatsapp.png" alt="WhatsApp" className="w-3 h-3" />
+                              WhatsApp
+                            </a>
+
+                            <a
+                              href={getShareLinks("ai-giveth").telegram}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={handleShareOptionClick}
+                              className="flex items-center gap-2 px-2 py-1.5 bg-sky-900/20 border border-sky-800/30 rounded text-sky-300 text-xs hover:bg-sky-900/30 transition-colors"
+                            >
+                              <img src="/images/telegram.png" alt="Telegram" className="w-3 h-3" />
+                              Telegram
+                            </a>
+
+                            <a
+                              href={getShareLinks("ai-giveth").linkedin}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={handleShareOptionClick}
+                              className="flex items-center gap-2 px-2 py-1.5 bg-blue-900/20 border border-blue-800/30 rounded text-blue-300 text-xs hover:bg-blue-900/30 transition-colors"
+                            >
+                              <img src="/images/linkedin.png" alt="LinkedIn" className="w-3 h-3" />
+                              LinkedIn
+                            </a>
+
+                            <button
+                              onClick={(e) => {
+                                handleShareOptionClick(e);
+                                navigator.clipboard.writeText(getShareLinks("ai-giveth").copy);
+                                setShowShare(null);
+                              }}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 bg-slate-700/30 border border-slate-600/30 rounded text-gray-300 text-xs hover:bg-slate-700/40 transition-colors"
+                            >
+                              <Copy size={12} />
+                              Copy Link
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </span>
+              </div>
+              
+              <div className="flex flex-col lg:flex-row gap-8">
+                <div className="flex-1">
+                  <div className="mb-6">
+                    <div className="inline-block px-3 py-1 bg-violet-900/30 text-violet-300 rounded-full text-xs font-medium mb-3 border border-violet-800/50">
+                      AI Revolution
+                    </div>
+                    <h3 className="text-2xl font-bold text-white leading-tight">
+                      AI Giveth and AI Taketh Away
+                    </h3>
+                    <p className="text-gray-300 mt-4 text-sm leading-relaxed">
+                      Started late in 2022 with the advent of ChatGPT, the AI bull run is looking fragile as Anthropic keeps progressing at Warp Speed. Is the end near?
+                    </p>
+                  </div>
+
+                  {expandedArticle1 && (
+                    <div className="mt-8 text-gray-300 text-sm leading-relaxed space-y-8">
+                      <div className="space-y-4">
+                        <p className="leading-relaxed">
+                          The bull run origin could be dated back to late 2022 when ChatGPT was launched. Few months later, when Nvidia gave a mind-blowing guidance for the first time, that AI-led bull run took off, where we have seen Nvidia go up more than 20x in a span of four years, and a lot of the ecosystem players which have done even better (look at WD, SanDisk for example).
+                        </p>
+                        
+                        <p className="leading-relaxed">
+                          But that has come at the cost of software makers.
+                        </p>
+                        
+                        <p className="leading-relaxed">
+                          That's even more visible especially over the last week. As markets are becoming jittery, unable to make new highs, and AI keeps progressing, the software makers are taking it on their chin. Investors aren't even differentiating. It seems if you're a software maker of any kind, they are rushing out of the door.
+                        </p>
+                      </div>
+
+                      {/* Graph Images - First Row */}
+                      <div className="my-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Graph 1 */}
+                        <div className="flex flex-col items-center">
+                          <div 
+                            className={`relative overflow-hidden rounded-lg border border-slate-600 transition-all duration-300 ease-out w-full ${
+                              hoveredImage === 'w4_chart1' ? 'scale-105 shadow-2xl shadow-cyan-500/20' : 'scale-100'
+                            }`}
+                            onMouseEnter={() => setHoveredImage('w4_chart1')}
+                            onMouseLeave={() => setHoveredImage(null)}
+                          >
+                            <img
+                              src="/images/w4_chart1.png"
+                              alt="AI software stocks chart 1"
+                              className="w-full rounded-lg"
+                            />
+                            {hoveredImage === 'w4_chart1' && (
+                              <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/10 to-transparent pointer-events-none" />
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-400 mt-3 text-center italic"></p>
+                        </div>
+
+                        {/* Graph 2 */}
+                        <div className="flex flex-col items-center">
+                          <div 
+                            className={`relative overflow-hidden rounded-lg border border-slate-600 transition-all duration-300 ease-out w-full ${
+                              hoveredImage === 'w4_chart2' ? 'scale-105 shadow-2xl shadow-cyan-500/20' : 'scale-100'
+                            }`}
+                            onMouseEnter={() => setHoveredImage('w4_chart2')}
+                            onMouseLeave={() => setHoveredImage(null)}
+                          >
+                            <img
+                              src="/images/w4_chart2.png"
+                              alt="AI software stocks chart 2"
+                              className="w-full rounded-lg"
+                            />
+                            {hoveredImage === 'w4_chart2' && (
+                              <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/10 to-transparent pointer-events-none" />
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-400 mt-3 text-center italic"></p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <p className="leading-relaxed">
+                          The updates that have been rolling out of Anthropic's Claude at warp speed seem to be going after eliminating a lot of the human work — whether it's involved in coding, creating apps, research, admin, or first-level reviews. Companies related to those kinds of services have headed down.
+                        </p>
+                        
+                        <p className="leading-relaxed">
+                          So whether you look at the price action of Gartner or Morningstar, or even for that matter Accenture last evening — the damage is visible.
+                        </p>
+                      </div>
+
+                      {/* Graph Images - Second Row - Vertical Layout */}
+<div className="my-8 space-y-6">
+  {/* Graph 3 */}
+  <div className="flex flex-col items-center">
+    <div 
+      className={`relative overflow-hidden rounded-lg border border-slate-600 transition-all duration-300 ease-out w-full max-w-2xl ${
+        hoveredImage === 'w4_chart3' ? 'scale-105 shadow-2xl shadow-cyan-500/20' : 'scale-100'
+      }`}
+      onMouseEnter={() => setHoveredImage('w4_chart3')}
+      onMouseLeave={() => setHoveredImage(null)}
+    >
+      <img
+        src="/images/w4_chart3.png"
+        alt="Gartner and Morningstar performance"
+        className="w-full rounded-lg"
+      />
+      {hoveredImage === 'w4_chart3' && (
+        <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/10 to-transparent pointer-events-none" />
+      )}
+    </div>
+    <p className="text-xs text-gray-400 mt-3 text-center italic"></p>
+  </div>
+
+  {/* Graph 4 */}
+  <div className="flex flex-col items-center">
+    <div 
+      className={`relative overflow-hidden rounded-lg border border-slate-600 transition-all duration-300 ease-out w-full max-w-2xl ${
+        hoveredImage === 'w4_chart4' ? 'scale-105 shadow-2xl shadow-cyan-500/20' : 'scale-100'
+      }`}
+      onMouseEnter={() => setHoveredImage('w4_chart4')}
+      onMouseLeave={() => setHoveredImage(null)}
+    >
+      <img
+        src="/images/w4_chart4.png"
+        alt="Accenture performance chart"
+        className="w-full rounded-lg"
+      />
+      {hoveredImage === 'w4_chart4' && (
+        <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/10 to-transparent pointer-events-none" />
+      )}
+    </div>
+    <p className="text-xs text-gray-400 mt-3 text-center italic"></p>
+  </div>
+</div>
+                      <div className="space-y-4">
+                        <p className="leading-relaxed">
+                          Even Microsoft hasn't been spared, despite the AI story, stake in ChatGPT (loss-making), and Azure growth of 38% (vs 39% estimate) last quarter. It's down more than 25% from its peak that came in October 2025 and about to test crucial support around 400.
+                        </p>
+                      </div>
+
+                      {/* Microsoft Chart */}
+                      <div className="flex flex-col items-center">
+                        <div 
+                          className={`relative overflow-hidden rounded-lg border border-slate-600 transition-all duration-300 ease-out w-full max-w-2xl ${
+                            hoveredImage === 'w4_chart5' ? 'scale-105 shadow-2xl shadow-cyan-500/20' : 'scale-100'
+                          }`}
+                          onMouseEnter={() => setHoveredImage('w4_chart5')}
+                          onMouseLeave={() => setHoveredImage(null)}
+                        >
+                          <img
+                            src="/images/w4_chart5.png"
+                            alt="Microsoft stock performance"
+                            className="w-full rounded-lg"
+                          />
+                          {hoveredImage === 'w4_chart5' && (
+                            <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/10 to-transparent pointer-events-none" />
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-3 text-center italic"></p>
+                      </div>
+
+                      <div className="space-y-4">
+                        <p className="leading-relaxed">
+                          Lastly, if you look today in the Indian market, the IT services sector is falling apart. TCS, Infosys, HCL — all of them down in the range of 5–7% in early trade. This is also indicative of the fact that as AI keeps growing, the services sector billable hours will keep coming down.
+                        </p>
+                      </div>
+
+                      {/* Indian IT Chart */}
+                      <div className="flex flex-col items-center">
+                        <div 
+                          className={`relative overflow-hidden rounded-lg border border-slate-600 transition-all duration-300 ease-out w-full max-w-2xl ${
+                            hoveredImage === 'w4_chart6' ? 'scale-105 shadow-2xl shadow-cyan-500/20' : 'scale-100'
+                          }`}
+                          onMouseEnter={() => setHoveredImage('w4_chart6')}
+                          onMouseLeave={() => setHoveredImage(null)}
+                        >
+                          <img
+                            src="/images/w4_chart6.png"
+                            alt="Indian IT sector performance"
+                            className="w-full rounded-lg"
+                          />
+                          {hoveredImage === 'w4_chart6' && (
+                            <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/10 to-transparent pointer-events-none" />
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-3 text-center italic"></p>
+                      </div>
+
+                      <div className="space-y-4">
+                        <p className="leading-relaxed">
+                          Anthropic's progress is making everyone question the bazillion dollars ChatGPT is spending on people creating Ghibli's and its key partners are suffering. Nvidia, Oracle for example. They are far from their peaks and well, keep dipping.
+                        </p>
+                      </div>
+
+                      {/* Nvidia and Oracle Chart */}
+                      <div className="flex flex-col items-center">
+                        <div 
+                          className={`relative overflow-hidden rounded-lg border border-slate-600 transition-all duration-300 ease-out w-full max-w-2xl ${
+                            hoveredImage === 'w4_chart7' ? 'scale-105 shadow-2xl shadow-cyan-500/20' : 'scale-100'
+                          }`}
+                          onMouseEnter={() => setHoveredImage('w4_chart7')}
+                          onMouseLeave={() => setHoveredImage(null)}
+                        >
+                          <img
+                            src="/images/w4_chart7.png"
+                            alt="Nvidia and Oracle performance"
+                            className="w-full rounded-lg"
+                          />
+                          {hoveredImage === 'w4_chart7' && (
+                            <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/10 to-transparent pointer-events-none" />
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-3 text-center italic"></p>
+                      </div>
+
+                      {/* Nvidia and Oracle Chart2 */}
+                      <div className="flex flex-col items-center">
+                        <div 
+                          className={`relative overflow-hidden rounded-lg border border-slate-600 transition-all duration-300 ease-out w-full max-w-2xl ${
+                            hoveredImage === 'w4_chart8' ? 'scale-105 shadow-2xl shadow-cyan-500/20' : 'scale-100'
+                          }`}
+                          onMouseEnter={() => setHoveredImage('w4_chart8')}
+                          onMouseLeave={() => setHoveredImage(null)}
+                        >
+                          <img
+                            src="/images/w4_chart8.png"
+                            alt="Nvidia and Oracle performance"
+                            className="w-full rounded-lg"
+                          />
+                          {hoveredImage === 'w4_chart8' && (
+                            <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/10 to-transparent pointer-events-none" />
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-3 text-center italic"></p>
+                      </div>
+
+
+                      <div className="space-y-4">
+                        <p className="leading-relaxed">
+                          But eventually, after all that carnage, there would be somewhere these software / services stocks will bottom. Where do you see the bottom happening?
+                        </p>
+                        
+                        <p className="leading-relaxed font-semibold">
+                          But more importantly, has the AI bull run runs its course (atleast for now)?
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Show Read More/Less button */}
+                  {!isSharedView && (
+  <button
+    id="article-1-button"
+    onClick={() => {
+      console.log("🔵 Article 1 button clicked");
+      console.log("Current expandedArticle1:", expandedArticle1);
+      console.log("Setting to:", !expandedArticle1);
+      setExpandedArticle1(!expandedArticle1);
+    }}
+    className="mt-8 px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-cyan-400 font-medium transition-all duration-200 flex items-center gap-2 group"
+  >
+    {expandedArticle1 ? (
+      <>
+        <span>Read Less</span>
+        <span className="group-hover:-translate-y-0.5 transition-transform">↑</span>
+      </>
+    ) : (
+      <>
+        <span>Read Full Article</span>
+        <span className="group-hover:translate-y-0.5 transition-transform">↓</span>
+      </>
+    )}
+  </button>
+)}
+                </div>
+              </div>
             </div>
+          </section>
           )}
 
-          {/* ARTICLE 1 - INDIA MARKETS */}
+
+          {/* ARTICLE 2 - INDIA MARKETS */}
+
+          {(!isSharedView || expandedArticle2) && (
           
           <section id="india-markets" className="mb-16">
             <div className="p-6 bg-slate-800/60 border border-slate-700/50 rounded-xl backdrop-blur-sm">
@@ -372,7 +809,7 @@ export default function Newsletter() {
                     </p>
                   </div>
 
-                  {expandedArticle1 && (
+                  {expandedArticle2 && (
                     <div className="mt-8 text-gray-300 text-sm leading-relaxed space-y-8">
                       <div className="space-y-4">
                         <p className="leading-relaxed">
@@ -485,28 +922,38 @@ export default function Newsletter() {
                   )}
 
                   {/* Show Read More/Less button */}
-                  <button
-                    onClick={() => setExpandedArticle1(!expandedArticle1)}
-                    className="mt-8 px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-purple-400 font-medium transition-all duration-200 flex items-center gap-2 group"
-                  >
-                    {expandedArticle1 ? (
-                      <>
-                        <span>Read Less</span>
-                        <span className="group-hover:-translate-y-0.5 transition-transform">↑</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Read Full Article</span>
-                        <span className="group-hover:translate-y-0.5 transition-transform">↓</span>
-                      </>
-                    )}
-                  </button>
+                 {!isSharedView && (
+  <button
+    id="article-2-button"
+    onClick={() => {
+      console.log("🔵 Article 2 button clicked");
+      console.log("Current expandedArticle2:", expandedArticle2);
+      console.log("Setting to:", !expandedArticle2);
+      setExpandedArticle2(!expandedArticle2);
+    }}
+    className="mt-8 px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-cyan-400 font-medium transition-all duration-200 flex items-center gap-2 group"
+  >
+    {expandedArticle2 ? (
+      <>
+        <span>Read Less</span>
+        <span className="group-hover:-translate-y-0.5 transition-transform">↑</span>
+      </>
+    ) : (
+      <>
+        <span>Read Full Article</span>
+        <span className="group-hover:translate-y-0.5 transition-transform">↓</span>
+      </>
+    )}
+  </button>
+)}
                 </div>
               </div>
             </div>
           </section>
+          )}
       
-          {/* ARTICLE 2 - NATURAL GAS */}
+          {/* ARTICLE 3 - NATURAL GAS */}
+{(!isSharedView || expandedArticle3) && (
           <section id="widowmaker" className="mb-16">
             <div className="p-6 bg-slate-800/60 border border-slate-700/50 rounded-xl backdrop-blur-sm">
               <div className="flex items-center gap-4 text-sm text-gray-400 mb-6 flex-wrap border-b border-slate-700/50 pb-4">
@@ -610,7 +1057,7 @@ export default function Newsletter() {
                     </p>
                   </div>
 
-                  {expandedArticle2 && (
+                  {expandedArticle3 && (
                     <div className="mt-8 text-gray-300 text-sm leading-relaxed space-y-8">
                       <div className="space-y-4">
                         <p className="leading-relaxed">
@@ -683,28 +1130,38 @@ export default function Newsletter() {
                   )}
 
                   {/* Show Read More/Less button */}
-                  <button
-                    onClick={() => setExpandedArticle2(!expandedArticle2)}
-                    className="mt-8 px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-red-400 font-medium transition-all duration-200 flex items-center gap-2 group"
-                  >
-                    {expandedArticle2 ? (
-                      <>
-                        <span>Read Less</span>
-                        <span className="group-hover:-translate-y-0.5 transition-transform">↑</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Read Full Article</span>
-                        <span className="group-hover:translate-y-0.5 transition-transform">↓</span>
-                      </>
-                    )}
-                  </button>
+                 {!isSharedView && (
+  <button
+    id="article-3-button"
+    onClick={() => {
+      console.log("🔵 Article 3 button clicked");
+      console.log("Current expandedArticle3:", expandedArticle3);
+      console.log("Setting to:", !expandedArticle3);
+      setExpandedArticle3(!expandedArticle3);
+    }}
+    className="mt-8 px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-cyan-400 font-medium transition-all duration-200 flex items-center gap-2 group"
+  >
+    {expandedArticle3 ? (
+      <>
+        <span>Read Less</span>
+        <span className="group-hover:-translate-y-0.5 transition-transform">↑</span>
+      </>
+    ) : (
+      <>
+        <span>Read Full Article</span>
+        <span className="group-hover:translate-y-0.5 transition-transform">↓</span>
+      </>
+    )}
+  </button>
+)}
                 </div>
               </div>
             </div>
           </section>
+          )}
 
-          {/* ARTICLE 3 - YEAR REVIEW */}
+          {/* ARTICLE 4 - YEAR REVIEW */}
+{(!isSharedView || expandedArticle4) && (
           <section id="year-review" className="mb-16">
             <div className="p-6 bg-slate-800/60 border border-slate-700/50 rounded-xl backdrop-blur-sm">
               <div className="flex items-center gap-4 text-sm text-gray-400 mb-6 flex-wrap border-b border-slate-700/50 pb-4">
@@ -807,7 +1264,7 @@ export default function Newsletter() {
                     </p>
                   </div>
 
-                  {expandedArticle3 && (
+                  {expandedArticle4 && (
                     <div className="mt-8 text-gray-300 text-base leading-relaxed space-y-8">
                       {/* FULL ARTICLE CONTENT */}
                       <div className="space-y-4">
@@ -1020,28 +1477,38 @@ export default function Newsletter() {
                   )}
 
                   {/* Show Read More/Less button */}
-                  <button
-                    onClick={() => setExpandedArticle3(!expandedArticle3)}
-                    className="mt-8 px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-amber-400 font-medium transition-all duration-200 flex items-center gap-2 group"
-                  >
-                    {expandedArticle3 ? (
-                      <>
-                        <span>Read Less</span>
-                        <span className="group-hover:-translate-y-0.5 transition-transform">↑</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Read Full Article</span>
-                        <span className="group-hover:translate-y-0.5 transition-transform">↓</span>
-                      </>
-                    )}
-                  </button>
+                  {!isSharedView && (
+  <button
+    id="article-4-button"
+    onClick={() => {
+      console.log("🔵 Article 4 button clicked");
+      console.log("Current expandedArticle4:", expandedArticle4);
+      console.log("Setting to:", !expandedArticle4);
+      setExpandedArticle4(!expandedArticle4);
+    }}
+    className="mt-8 px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-cyan-400 font-medium transition-all duration-200 flex items-center gap-2 group"
+  >
+    {expandedArticle4 ? (
+      <>
+        <span>Read Less</span>
+        <span className="group-hover:-translate-y-0.5 transition-transform">↑</span>
+      </>
+    ) : (
+      <>
+        <span>Read Full Article</span>
+        <span className="group-hover:translate-y-0.5 transition-transform">↓</span>
+      </>
+    )}
+  </button>
+)}
                 </div>
               </div>
             </div>
           </section>
+          )}
 
-          {/* ARTICLE 4 - ALTSEASON */}
+         {/* ARTICLE 5 - ALTSEASON */}
+{(!isSharedView || expandedArticle5) && (
           <section id="altseason" className="mb-16">
             <div className="p-6 bg-slate-800/60 border border-slate-700/50 rounded-xl backdrop-blur-sm">
               <div className="flex items-center gap-4 text-sm text-gray-400 mb-6 flex-wrap border-b border-slate-700/50 pb-4">
@@ -1144,7 +1611,7 @@ export default function Newsletter() {
                     </p>
                   </div>
 
-                  {expandedArticle4 && (
+                  {expandedArticle5 && (
                     <div className="mt-8 text-gray-300 text-base leading-relaxed space-y-8">
                 
                       {/* FULL ARTICLE CONTENT */}
@@ -1426,27 +1893,36 @@ export default function Newsletter() {
                     </div>
                   )}
 
-                  {/* Show Read More/Less button */}
-                  <button
-                    onClick={() => setExpandedArticle4(!expandedArticle4)}
-                    className="mt-8 px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-cyan-400 font-medium transition-all duration-200 flex items-center gap-2 group"
-                  >
-                    {expandedArticle4 ? (
-                      <>
-                        <span>Read Less</span>
-                        <span className="group-hover:-translate-y-0.5 transition-transform">↑</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Read Full Article</span>
-                        <span className="group-hover:translate-y-0.5 transition-transform">↓</span>
-                      </>
-                    )}
-                  </button>
+
+{!isSharedView && (
+  <button
+    id="article-5-button"
+    onClick={() => {
+      console.log("🔵 Article 5 button clicked");
+      console.log("Current expandedArticle5:", expandedArticle5);
+      console.log("Setting to:", !expandedArticle5);
+      setExpandedArticle5(!expandedArticle5);
+    }}
+    className="mt-8 px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-cyan-400 font-medium transition-all duration-200 flex items-center gap-2 group"
+  >
+    {expandedArticle5 ? (
+      <>
+        <span>Read Less</span>
+        <span className="group-hover:-translate-y-0.5 transition-transform">↑</span>
+      </>
+    ) : (
+      <>
+        <span>Read Full Article</span>
+        <span className="group-hover:translate-y-0.5 transition-transform">↓</span>
+      </>
+    )}
+  </button>
+)}
                 </div>
               </div>
             </div>
           </section>
+          )}
 
           {/* ================= FOOTER ================= */}
           <footer className="mt-20 py-4 bg-slate-1000/50 text-center text-sm text-slate-500">

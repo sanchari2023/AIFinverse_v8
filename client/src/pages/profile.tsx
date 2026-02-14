@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import {
   User, Mail, ShieldCheck, ChevronRight, Globe,
   Target, RefreshCw, Building2, MapPin, Clock,
-  Star, Trash2, Eye, EyeOff, Edit, Plus, X
+  Star, Trash2, Eye, EyeOff, Edit, Plus, X, Search, Check
 } from "lucide-react";
 import PageWrapper from "@/components/PageWrapper";
 import {
@@ -76,15 +76,24 @@ export default function Profile() {
     updatedAt: new Date().toISOString()
   });
 
-  const [watchlist, setWatchlist] = useState<Array<{
-    symbol: string;
-    name: string;
-    market: string;
-    added_at: string;
-  }>>([]);
+  // Updated watchlist structure to match backend
+  const [watchlist, setWatchlist] = useState({
+    India: [] as Array<{ company_name: string; base_symbol: string }>,
+    US: [] as Array<{ company_name: string; base_symbol: string }>
+  });
 
-  const [showAllWatchlist, setShowAllWatchlist] = useState(false);
+  const [showAllWatchlist, setShowAllWatchlist] = useState({
+    India: false,
+    US: false
+  });
+
   const [isLoadingWatchlist, setIsLoadingWatchlist] = useState(false);
+  
+  // State for available companies from API
+  const [availableCompanies, setAvailableCompanies] = useState({
+    India: [] as Array<{ company_name: string; base_symbol: string }>,
+    US: [] as Array<{ company_name: string; base_symbol: string }>
+  });
 
   // Modal states
   const [editMarketModal, setEditMarketModal] = useState<{
@@ -99,8 +108,22 @@ export default function Profile() {
     isActive: false
   });
 
+  // New modal for watchlist editing
+  const [editWatchlistModal, setEditWatchlistModal] = useState<{
+    open: boolean;
+    market: 'India' | 'US';
+    selectedCompanies: string[];
+    searchQuery: string;
+  }>({
+    open: false,
+    market: 'India',
+    selectedCompanies: [],
+    searchQuery: ""
+  });
+
   const [selectedStrategies, setSelectedStrategies] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingWatchlist, setIsSavingWatchlist] = useState(false);
 
   /* ---------------- LOAD PROFILE FROM S3 ---------------- */
   const loadUserProfile = async () => {
@@ -130,6 +153,13 @@ export default function Profile() {
         India: { is_active: false, strategies: [] },
         US: { is_active: false, strategies: [] }
       };
+      
+      // Extract watchlist data - check multiple possible locations
+      const watchlistData = responseData.watchlist || 
+                           responseData.watchlist_summary || 
+                           { India: [], US: [] };
+      
+      console.log("Watchlist data from API:", watchlistData);
       
       // CHECK ALL POSSIBLE LOCATIONS FOR ORIGINAL MARKET
       let originalMarket = "";
@@ -299,15 +329,17 @@ export default function Profile() {
 
       console.log("Updated Profile:", updatedProfile);
       
+      // Set user profile
       setUserProfile(updatedProfile);
       
-      // Load watchlist
-      loadWatchlist();
+      // Set watchlist from API response
+      setWatchlist(watchlistData);
 
       // Update localStorage with fresh data
       const localStorageProfile = {
         ...savedProfile,
-        ...updatedProfile
+        ...updatedProfile,
+        watchlist: watchlistData
       };
       localStorage.setItem("userProfile", JSON.stringify(localStorageProfile));
       
@@ -318,6 +350,7 @@ export default function Profile() {
       localStorage.setItem("marketPreferences", JSON.stringify(updatedProfile.marketPreferences));
       localStorage.setItem("activeMarkets", JSON.stringify(activeMarkets));
       localStorage.setItem("activeStrategies", JSON.stringify(activeStrategies));
+      localStorage.setItem("userWatchlist", JSON.stringify(watchlistData));
       
       // Save original preferences separately for backup
       if (originalMarket) {
@@ -327,15 +360,7 @@ export default function Profile() {
         localStorage.setItem("originalSelectedStrategies", JSON.stringify(originalStrategies));
       }
 
-      console.log("Updated localStorage with:", {
-        userName: localStorage.getItem("userName"),
-        userEmail: updatedProfile.email,
-        originalMarket: originalMarket,
-        originalStrategies: originalStrategies,
-        marketPreferences: updatedProfile.marketPreferences,
-        activeMarkets: activeMarkets,
-        activeStrategies: activeStrategies
-      });
+      console.log("Updated localStorage with watchlist:", watchlistData);
 
       // Notify Navbar to update immediately
       window.dispatchEvent(new Event("storage"));
@@ -347,6 +372,8 @@ export default function Profile() {
       const savedProfile = JSON.parse(localStorage.getItem("userProfile") || "{}");
       if (Object.keys(savedProfile).length > 0) {
         setUserProfile(savedProfile);
+        const savedWatchlist = JSON.parse(localStorage.getItem('userWatchlist') || '{"India":[],"US":[]}');
+        setWatchlist(savedWatchlist);
         console.log("Using cached profile from localStorage");
       }
     } finally {
@@ -359,71 +386,159 @@ export default function Profile() {
     loadUserProfile();
   }, []);
 
-  // Load watchlist from API
-  const loadWatchlist = async () => {
+  // Load available companies from API
+  const loadAvailableCompanies = async (market: "India" | "US") => {
     try {
       setIsLoadingWatchlist(true);
-      const userEmail = userProfile.email || localStorage.getItem('userEmail');
+      const endpoint = market === "India" ? "/companies/india" : "/companies/us";
+      const response = await api.get(endpoint);
       
-      if (!userEmail) {
-        console.error("No email found for watchlist");
-        return;
-      }
+      const companies = response.data.companies || [];
+      setAvailableCompanies(prev => ({
+        ...prev,
+        [market]: companies
+      }));
       
-      const response = await api.get(`/watchlist/${userEmail}`);
-      const watchlistData = response.data.watchlist;
-      
-      // Combine India and US watchlist
-      const allStocks = [
-        ...(watchlistData.India || []).map((item: any) => ({ ...item, market: 'India' })),
-        ...(watchlistData.US || []).map((item: any) => ({ ...item, market: 'US' }))
-      ];
-      
-      // Sort by added date (newest first)
-      allStocks.sort((a, b) => 
-        new Date(b.added_at).getTime() - new Date(a.added_at).getTime()
-      );
-      
-      setWatchlist(allStocks);
+      console.log(`Loaded ${companies.length} companies for ${market}`);
     } catch (error) {
-      console.error("Error loading watchlist:", error);
-      // Fallback to localStorage if API fails
-      const savedWatchlist = JSON.parse(localStorage.getItem('userWatchlist') || '[]');
-      setWatchlist(savedWatchlist);
+      console.error(`Error loading ${market} companies:`, error);
     } finally {
       setIsLoadingWatchlist(false);
     }
   };
 
-  // Remove from watchlist
-  const removeFromWatchlist = async (symbol: string, market: string) => {
-    try {
-      const userEmail = userProfile.email || localStorage.getItem('userEmail');
+  // Open watchlist edit modal
+  const openEditWatchlistModal = (market: 'India' | 'US') => {
+    // Load available companies for this market
+    loadAvailableCompanies(market);
+    
+    // Get currently selected companies for this market
+    const currentCompanies = watchlist[market].map(item => item.company_name);
+    
+    setEditWatchlistModal({
+      open: true,
+      market,
+      selectedCompanies: [...currentCompanies],
+      searchQuery: ""
+    });
+  };
+
+  // Handle watchlist company toggle in modal - REMOVED ALL FRONTEND LIMIT CHECKS
+  const handleWatchlistCompanyToggle = (companyName: string) => {
+    setEditWatchlistModal(prev => {
+      const isSelected = prev.selectedCompanies.includes(companyName);
       
-      const response = await api.post('/watchlist/remove', {
-        email: userEmail,
-        market: market,
-        stock_symbol: symbol
+      if (isSelected) {
+        // Remove if already selected
+        return {
+          ...prev,
+          selectedCompanies: prev.selectedCompanies.filter(name => name !== companyName)
+        };
+      } else {
+        // ADD WITHOUT ANY FRONTEND LIMIT CHECK - Backend will handle it
+        return {
+          ...prev,
+          selectedCompanies: [...prev.selectedCompanies, companyName]
+        };
+      }
+    });
+  };
+
+  // Save watchlist changes
+  const saveWatchlistChanges = async () => {
+    setIsSavingWatchlist(true);
+    try {
+      const userId = userProfile.userId || localStorage.getItem("userId");
+      const { market, selectedCompanies } = editWatchlistModal;
+      
+      if (!userId) {
+        alert("User ID not found");
+        return;
+      }
+
+      // Get current companies for this market
+      const currentCompanies = watchlist[market].map(item => item.company_name);
+      
+      // Determine companies to add (new selections not currently in watchlist)
+      const companiesToAdd = selectedCompanies.filter(
+        company => !currentCompanies.includes(company)
+      );
+      
+      // Determine companies to remove (currently in watchlist but not in new selection)
+      const companiesToRemove = currentCompanies.filter(
+        company => !selectedCompanies.includes(company)
+      );
+      
+      console.log(`Watchlist changes for ${market}:`, {
+        toAdd: companiesToAdd,
+        toRemove: companiesToRemove,
+        current: currentCompanies,
+        selected: selectedCompanies
       });
       
-      if (response.status === 200) {
-        // Update local state
-        setWatchlist(prev => prev.filter(item => 
-          !(item.symbol === symbol && item.market === market)
-        ));
-        
-        // Update localStorage
-        const updatedWatchlist = watchlist.filter(item => 
-          !(item.symbol === symbol && item.market === market)
-        );
-        localStorage.setItem('userWatchlist', JSON.stringify(updatedWatchlist));
-        
-        alert('Removed from watchlist!');
+      // Process removals first
+      if (companiesToRemove.length > 0) {
+        const endpoint = market === "India" ? "/watchlist/modify/india" : "/watchlist/modify/us";
+        await api.post(endpoint, {
+          user_id: userId,
+          companies: companiesToRemove,
+          action: "remove"
+        });
       }
-    } catch (error) {
-      console.error("Error removing from watchlist:", error);
-      alert('Failed to remove from watchlist');
+      
+      // Process additions
+      if (companiesToAdd.length > 0) {
+        const endpoint = market === "India" ? "/watchlist/modify/india" : "/watchlist/modify/us";
+        await api.post(endpoint, {
+          user_id: userId,
+          companies: companiesToAdd,
+          action: "add"
+        });
+      }
+      
+      // Update local state
+      const filteredAvailableCompanies = availableCompanies[market].filter(
+        company => selectedCompanies.includes(company.company_name)
+      );
+      
+      setWatchlist(prev => ({
+        ...prev,
+        [market]: filteredAvailableCompanies
+      }));
+      
+      // Update localStorage
+      const updatedWatchlist = {
+        ...watchlist,
+        [market]: filteredAvailableCompanies
+      };
+      localStorage.setItem('userWatchlist', JSON.stringify(updatedWatchlist));
+      
+      // Close modal
+      setEditWatchlistModal(prev => ({ ...prev, open: false }));
+      alert(`${market} watchlist updated successfully!`);
+      
+      // Refresh profile to sync with backend
+      loadUserProfile();
+      
+    } catch (error: any) {
+      console.error("Error saving watchlist changes:", error);
+      alert(error.response?.data?.detail || 'Failed to save watchlist changes');
+    } finally {
+      setIsSavingWatchlist(false);
     }
+  };
+
+  // Filter companies based on search query
+  const getFilteredCompanies = (market: "India" | "US") => {
+    const companies = availableCompanies[market];
+    const query = editWatchlistModal.searchQuery.toLowerCase();
+    
+    if (!query) return companies;
+    
+    return companies.filter(company => 
+      company.company_name.toLowerCase().includes(query) ||
+      company.base_symbol.toLowerCase().includes(query)
+    );
   };
 
   /* ---------------- MARKET PREFERENCE EDIT FUNCTIONS ---------------- */
@@ -537,26 +652,12 @@ export default function Profile() {
     }
   };
 
-  const formatWatchlistDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      const now = new Date();
-      const diffMs = now.getTime() - date.getTime();
-      const diffMins = Math.floor(diffMs / (1000 * 60));
-      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      
-      if (diffMins < 60) return `${diffMins}m ago`;
-      if (diffHours < 24) return `${diffHours}h ago`;
-      if (diffDays < 7) return `${diffDays}d ago`;
-      
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric' 
-      });
-    } catch {
-      return 'Recently';
-    }
+  // Toggle show all for specific market
+  const toggleShowAll = (market: "India" | "US") => {
+    setShowAllWatchlist(prev => ({
+      ...prev,
+      [market]: !prev[market]
+    }));
   };
 
   if (isLoading) {
@@ -612,7 +713,7 @@ export default function Profile() {
                   </CardHeader>
                   <CardContent className="space-y-6">
                     
-                    {/* Personal Information (unchanged) */}
+                    {/* Personal Information */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1">
                         <label className="text-xs text-slate-500 uppercase font-bold">First Name</label>
@@ -855,233 +956,212 @@ export default function Profile() {
                       </div>
                     </div>
 
-                   {/* Watchlist Section */}
-<div className="space-y-1 pt-4 border-t border-slate-800">
-  <label className="text-xs text-slate-500 uppercase font-bold flex items-center gap-2">
-    <Star className="w-4 h-4" /> My Watchlist
-  </label>
-  
-  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-    {/* India Watchlist Card */}
-    <div className={`p-4 rounded-lg border ${watchlist.filter(item => item.market === 'India').length > 0 ? 'border-green-500/50 bg-green-500/5' : 'border-slate-700 bg-slate-800/30'}`}>
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
-            <span className="text-lg">🇮🇳</span>
-          </div>
-          <span className="font-medium">India</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className={`px-2 py-1 text-xs rounded-full ${watchlist.filter(item => item.market === 'India').length > 0 ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'}`}>
-            {watchlist.filter(item => item.market === 'India').length > 0 ? 'Active' : 'Empty'}
-          </span>
-          <Button 
-            size="sm" 
-            variant="ghost"
-            onClick={() => alert('Coming Soon: Edit India Watchlist')}
-            className="h-8 w-8 p-0 text-slate-400 hover:text-green-400 hover:bg-green-500/10"
-          >
-            <Edit className="w-4 h-4" />
-          </Button>
-        </div>
-      </div>
-      
-      {watchlist.filter(item => item.market === 'India').length > 0 ? (
-        <div className="space-y-2">
-          <p className="text-xs text-slate-400">Stocks:</p>
-          <div className="space-y-2">
-            {(showAllWatchlist ? 
-              watchlist.filter(item => item.market === 'India') : 
-              watchlist.filter(item => item.market === 'India').slice(0, 3)
-            ).map((item, index) => (
-              <div 
-                key={index} 
-                className="flex items-center justify-between p-2 bg-slate-800/50 rounded-md hover:bg-slate-800/70 transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded bg-slate-700/50 flex items-center justify-center">
-                    <span className="text-xs font-bold">{item.symbol.charAt(0)}</span>
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium">{item.symbol}</div>
-                    <div className="text-xs text-slate-500 truncate max-w-[140px]">
-                      {item.name}
+                    {/* Watchlist Section */}
+                    <div className="space-y-1 pt-4 border-t border-slate-800">
+                      <label className="text-xs text-slate-500 uppercase font-bold flex items-center gap-2 mb-4">
+                        <Star className="w-4 h-4" /> MY WATCHLIST
+                      </label>
+                      
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* India Watchlist Card */}
+                        <div className="p-5 rounded-xl border border-slate-700 bg-gradient-to-br from-slate-800/50 to-slate-900/50">
+                          <div className="flex items-center justify-between mb-5">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500/20 to-emerald-600/20 flex items-center justify-center">
+                                <span className="text-2xl">🇮🇳</span>
+                              </div>
+                              <div>
+                                <div className="font-bold text-lg">India</div>
+                                <div className="text-sm text-slate-400">
+                                  {watchlist.India.length} stocks {/* REMOVED "/20" */}
+                                </div>
+                              </div>
+                            </div>
+                            <Button 
+                              size="sm"
+                              onClick={() => openEditWatchlistModal('India')}
+                              className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold h-9"
+                            >
+                              <Edit className="w-4 h-4 mr-2" /> Edit
+                            </Button>
+                          </div>
+                          
+                          {watchlist.India.length > 0 ? (
+                            <div className="space-y-2">
+                              <div className="flex flex-wrap gap-2">
+                                {(showAllWatchlist.India ? watchlist.India : watchlist.India.slice(0, 8)).map((item, index) => (
+                                  <div 
+                                    key={index} 
+                                    className="group relative px-3 py-2 bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-lg hover:border-green-500/30 transition-all"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-bold text-sm text-slate-100">{item.base_symbol || "N/A"}</span>
+                                      <span className="text-sm text-slate-400">
+                                        {item.company_name || "Unknown"}
+                                      </span>
+                                      
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (confirm(`Remove ${item.company_name} from India watchlist?`)) {
+                                            const userId = userProfile.userId || localStorage.getItem("userId");
+                                            if (userId) {
+                                              api.post("/watchlist/modify/india", {
+                                                user_id: userId,
+                                                companies: [item.company_name],
+                                                action: "remove"
+                                              }).then(() => {
+                                                loadUserProfile();
+                                                alert(`Removed ${item.company_name} from India watchlist!`);
+                                              });
+                                            }
+                                          }
+                                        }}
+                                        className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 bg-red-500 hover:bg-red-600 text-white p-1 rounded-full transition-all"
+                                        title="Remove stock"
+                                      >
+                                        <X className="w-2 h-2" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                              
+                              {!showAllWatchlist.India && watchlist.India.length > 8 && (
+                                <div className="text-center pt-2">
+                                  <button 
+                                    onClick={() => toggleShowAll("India")}
+                                    className="text-xs text-slate-500 hover:text-green-400 transition-colors"
+                                  >
+                                    + {watchlist.India.length - 8} more
+                                  </button>
+                                </div>
+                              )}
+                              
+                              {showAllWatchlist.India && watchlist.India.length > 8 && (
+                                <div className="text-center pt-2">
+                                  <button 
+                                    onClick={() => toggleShowAll("India")}
+                                    className="text-xs text-slate-500 hover:text-green-400 transition-colors"
+                                  >
+                                    Show less
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-center py-6 bg-gradient-to-br from-slate-800/30 to-slate-900/30 rounded-xl border border-slate-700/50">
+                              <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-slate-800/50 flex items-center justify-center">
+                                <Star className="w-6 h-6 text-slate-600" />
+                              </div>
+                              <p className="text-sm text-slate-400">No stocks in India watchlist</p>
+                              <p className="text-xs text-slate-600 mt-1">
+                                Click Edit to add stocks
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* US Watchlist Card */}
+                        <div className="p-5 rounded-xl border border-slate-700 bg-gradient-to-br from-slate-800/50 to-slate-900/50">
+                          <div className="flex items-center justify-between mb-5">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-indigo-600/20 flex items-center justify-center">
+                                <span className="text-2xl">🇺🇸</span>
+                              </div>
+                              <div>
+                                <div className="font-bold text-lg">US</div>
+                                <div className="text-sm text-slate-400">
+                                  {watchlist.US.length} stocks {/* REMOVED "/20" */}
+                                </div>
+                              </div>
+                            </div>
+                            <Button 
+                              size="sm"
+                              onClick={() => openEditWatchlistModal('US')}
+                              className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold h-9"
+                            >
+                              <Edit className="w-4 h-4 mr-2" /> Edit
+                            </Button>
+                          </div>
+                          
+                          {watchlist.US.length > 0 ? (
+                            <div className="space-y-2">
+                              <div className="flex flex-wrap gap-2">
+                                {(showAllWatchlist.US ? watchlist.US : watchlist.US.slice(0, 8)).map((item, index) => (
+                                  <div 
+                                    key={index} 
+                                    className="group relative px-3 py-2 bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-lg hover:border-blue-500/30 transition-all"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-bold text-sm text-slate-100">{item.base_symbol || "N/A"}</span>
+                                      <span className="text-sm text-slate-400">
+                                        {item.company_name || "Unknown"}
+                                      </span>
+                                      
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (confirm(`Remove ${item.company_name} from US watchlist?`)) {
+                                            const userId = userProfile.userId || localStorage.getItem("userId");
+                                            if (userId) {
+                                              api.post("/watchlist/modify/us", {
+                                                user_id: userId,
+                                                companies: [item.company_name],
+                                                action: "remove"
+                                              }).then(() => {
+                                                loadUserProfile();
+                                                alert(`Removed ${item.company_name} from US watchlist!`);
+                                              });
+                                            }
+                                          }
+                                        }}
+                                        className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 bg-red-500 hover:bg-red-600 text-white p-1 rounded-full transition-all"
+                                        title="Remove stock"
+                                      >
+                                        <X className="w-2 h-2" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                              
+                              {!showAllWatchlist.US && watchlist.US.length > 8 && (
+                                <div className="text-center pt-2">
+                                  <button 
+                                    onClick={() => toggleShowAll("US")}
+                                    className="text-xs text-slate-500 hover:text-blue-400 transition-colors"
+                                  >
+                                    + {watchlist.US.length - 8} more
+                                  </button>
+                                </div>
+                              )}
+                              
+                              {showAllWatchlist.US && watchlist.US.length > 8 && (
+                                <div className="text-center pt-2">
+                                  <button 
+                                    onClick={() => toggleShowAll("US")}
+                                    className="text-xs text-slate-500 hover:text-blue-400 transition-colors"
+                                  >
+                                    Show less
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-center py-6 bg-gradient-to-br from-slate-800/30 to-slate-900/30 rounded-xl border border-slate-700/50">
+                              <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-slate-800/50 flex items-center justify-center">
+                                <Star className="w-6 h-6 text-slate-600" />
+                              </div>
+                              <p className="text-sm text-slate-400">No stocks in US watchlist</p>
+                              <p className="text-xs text-slate-600 mt-1">
+                                Click Edit to add stocks
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>  
                     </div>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500">
-                    {formatWatchlistDate(item.added_at)}
-                  </span>
-                  <Button 
-                    size="sm" 
-                    variant="ghost"
-                    onClick={() => removeFromWatchlist(item.symbol, item.market)}
-                    className="h-6 w-6 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-          
-          {!showAllWatchlist && watchlist.filter(item => item.market === 'India').length > 3 && (
-            <div className="text-center pt-1">
-              <button 
-                onClick={() => setShowAllWatchlist(true)}
-                className="text-xs text-slate-500 hover:text-green-400 transition-colors"
-              >
-                + {watchlist.filter(item => item.market === 'India').length - 3} more
-              </button>
-            </div>
-          )}
-          
-          {showAllWatchlist && watchlist.filter(item => item.market === 'India').length > 3 && (
-            <div className="text-center pt-1">
-              <button 
-                onClick={() => setShowAllWatchlist(false)}
-                className="text-xs text-slate-500 hover:text-green-400 transition-colors"
-              >
-                Show less
-              </button>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="text-center py-4">
-          <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-slate-800/50 flex items-center justify-center">
-            <Star className="w-5 h-5 text-slate-600" />
-          </div>
-          <p className="text-sm text-slate-500">No stocks in watchlist (Coming Soon...)</p>
-        </div>
-      )}
-    </div>
-    
-    {/* US Watchlist Card */}
-    <div className={`p-4 rounded-lg border ${watchlist.filter(item => item.market === 'US').length > 0 ? 'border-blue-500/50 bg-blue-500/5' : 'border-slate-700 bg-slate-800/30'}`}>
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
-            <span className="text-lg">🇺🇸</span>
-          </div>
-          <span className="font-medium">US</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className={`px-2 py-1 text-xs rounded-full ${watchlist.filter(item => item.market === 'US').length > 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-700 text-slate-400'}`}>
-            {watchlist.filter(item => item.market === 'US').length > 0 ? 'Active' : 'Empty'}
-          </span>
-          <Button 
-            size="sm" 
-            variant="ghost"
-            onClick={() => alert('Coming Soon: Edit US Watchlist')}
-            className="h-8 w-8 p-0 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10"
-          >
-            <Edit className="w-4 h-4" />
-          </Button>
-        </div>
-      </div>
-      
-      {watchlist.filter(item => item.market === 'US').length > 0 ? (
-        <div className="space-y-2">
-          <p className="text-xs text-slate-400">Stocks:</p>
-          <div className="space-y-2">
-            {(showAllWatchlist ? 
-              watchlist.filter(item => item.market === 'US') : 
-              watchlist.filter(item => item.market === 'US').slice(0, 3)
-            ).map((item, index) => (
-              <div 
-                key={index} 
-                className="flex items-center justify-between p-2 bg-slate-800/50 rounded-md hover:bg-slate-800/70 transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded bg-slate-700/50 flex items-center justify-center">
-                    <span className="text-xs font-bold">{item.symbol.charAt(0)}</span>
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium">{item.symbol}</div>
-                    <div className="text-xs text-slate-500 truncate max-w-[140px]">
-                      {item.name}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500">
-                    {formatWatchlistDate(item.added_at)}
-                  </span>
-                  <Button 
-                    size="sm" 
-                    variant="ghost"
-                    onClick={() => removeFromWatchlist(item.symbol, item.market)}
-                    className="h-6 w-6 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-          
-          {!showAllWatchlist && watchlist.filter(item => item.market === 'US').length > 3 && (
-            <div className="text-center pt-1">
-              <button 
-                onClick={() => setShowAllWatchlist(true)}
-                className="text-xs text-slate-500 hover:text-blue-400 transition-colors"
-              >
-                + {watchlist.filter(item => item.market === 'US').length - 3} more
-              </button>
-            </div>
-          )}
-          
-          {showAllWatchlist && watchlist.filter(item => item.market === 'US').length > 3 && (
-            <div className="text-center pt-1">
-              <button 
-                onClick={() => setShowAllWatchlist(false)}
-                className="text-xs text-slate-500 hover:text-blue-400 transition-colors"
-              >
-                Show less
-              </button>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="text-center py-4">
-          <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-slate-800/50 flex items-center justify-center">
-            <Star className="w-5 h-5 text-slate-600" />
-          </div>
-          <p className="text-sm text-slate-500">No stocks in watchlist (Coming Soon...)</p>
-        </div>
-      )}
-    </div>
-  </div>
-
-  {/* Global View All/Show Less Button */}
-  {(watchlist.filter(item => item.market === 'India').length > 3 || 
-    watchlist.filter(item => item.market === 'US').length > 3) && (
-    <div className="flex justify-center pt-4">
-      <Button 
-        size="sm" 
-        variant="outline"
-        onClick={() => setShowAllWatchlist(!showAllWatchlist)}
-        className="text-xs border-slate-700 text-slate-400 hover:text-cyan-400"
-      >
-        {showAllWatchlist ? (
-          <>
-            <EyeOff className="w-4 h-4 mr-2" />
-            Show Less
-          </>
-        ) : (
-          <>
-            <Eye className="w-4 h-4 mr-2" />
-            View All Stocks
-          </>
-        )}
-      </Button>
-    </div>
-  )}
-</div>
                   </CardContent>
                 </Card>
               )}
@@ -1169,6 +1249,198 @@ export default function Profile() {
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Watchlist Modal */}
+      <Dialog open={editWatchlistModal.open} onOpenChange={(open) => setEditWatchlistModal(prev => ({ ...prev, open }))}>
+        <DialogContent className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 text-white max-w-2xl max-h-[80vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader className="p-6 pb-4 border-b border-slate-800">
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="w-5 h-5 text-cyan-400" />
+              Edit {editWatchlistModal.market} Watchlist
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              
+            </DialogDescription>
+          </DialogHeader>
+          
+          {/* Selected Stocks Summary */}
+          <div className="px-6 py-4 border-b border-slate-800 bg-slate-900/50">
+            <div className="flex justify-between items-center mb-3">
+              <div>
+                <p className="font-semibold text-slate-300">
+                  Selected: {editWatchlistModal.selectedCompanies.length} stocks
+                </p>
+              </div>
+              {editWatchlistModal.selectedCompanies.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setEditWatchlistModal(prev => ({ ...prev, selectedCompanies: [] }))}
+                  className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                >
+                  Clear All
+                </Button>
+              )}
+            </div>
+            
+            {/* Selected Companies Chips - Scrollable */}
+            {editWatchlistModal.selectedCompanies.length > 0 && (
+              <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                {editWatchlistModal.selectedCompanies.map((companyName) => {
+                  const company = availableCompanies[editWatchlistModal.market].find(
+                    c => c.company_name === companyName
+                  );
+                  const symbol = company?.base_symbol || companyName;
+                  
+                  return (
+                    <div 
+                      key={companyName}
+                      className="group relative px-3 py-2 bg-gradient-to-r from-slate-800 to-slate-900 border border-slate-700 rounded-lg flex items-center gap-2"
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-slate-100">{symbol}</span>
+                        <span className="text-xs text-slate-400">
+                          {companyName}
+                        </span>
+                      </div>
+                      <button 
+                        onClick={() => handleWatchlistCompanyToggle(companyName)}
+                        className="text-slate-500 hover:text-red-400 transition-colors"
+                        title="Remove"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          
+          {/* Search Bar */}
+          <div className="px-6 py-4 border-b border-slate-800">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-500" />
+              <Input
+                placeholder={`Search Company / Symbol...`}
+                value={editWatchlistModal.searchQuery}
+                onChange={(e) => setEditWatchlistModal(prev => ({ ...prev, searchQuery: e.target.value }))}
+                className="pl-10 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
+              />
+            </div>
+          </div>
+          
+          {/* Companies List */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {isLoadingWatchlist ? (
+              <div className="flex justify-center items-center py-8">
+                <RefreshCw className="w-6 h-6 animate-spin text-cyan-400" />
+                <span className="ml-2 text-slate-400">Loading companies...</span>
+              </div>
+            ) : getFilteredCompanies(editWatchlistModal.market).length > 0 ? (
+              <div className="space-y-2">
+                {getFilteredCompanies(editWatchlistModal.market).map((company) => {
+                  const isSelected = editWatchlistModal.selectedCompanies.includes(company.company_name);
+                  
+                  return (
+                    <div 
+                      key={company.company_name}
+                      className={`group flex items-center justify-between p-4 rounded-xl cursor-pointer transition-all ${
+                        isSelected 
+                          ? 'bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-cyan-500/30' 
+                          : 'bg-slate-800/30 hover:bg-slate-800/50 border border-transparent'
+                      }`}
+                      onClick={() => handleWatchlistCompanyToggle(company.company_name)}
+                    >
+                      <div className="flex items-center gap-4">
+                        {/* Selection Indicator */}
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                          isSelected 
+                            ? 'bg-gradient-to-r from-blue-500 to-cyan-500' 
+                            : 'bg-slate-700'
+                        }`}>
+                          {isSelected ? (
+                            <Check className="w-4 h-4 text-white" />
+                          ) : (
+                            <Plus className="w-4 h-4 text-slate-400" />
+                          )}
+                        </div>
+                        
+                        {/* Company Info */}
+                        <div className="flex-1">
+                          <div className="font-bold text-slate-100">{company.base_symbol || "N/A"}</div>
+                          <div className="text-sm text-slate-400">
+                            {company.company_name || "Unknown Company"}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Add/Remove Button */}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleWatchlistCompanyToggle(company.company_name);
+                          }}
+                          className={`h-8 px-3 font-medium ${
+                            isSelected 
+                              ? 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700' 
+                              : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700'
+                          }`}
+                        >
+                          {isSelected ? 'Remove' : 'Add'}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <Search className="w-16 h-16 mx-auto text-slate-600 mb-4" />
+                <p className="text-lg text-slate-400">No companies found</p>
+                <p className="text-sm text-slate-500 mt-2">
+                  Try a different search term
+                </p>
+              </div>
+            )}
+          </div>
+          
+          {/* Footer */}
+          <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/50">
+            <div className="flex justify-between">
+              <Button
+                variant="outline"
+                onClick={() => setEditWatchlistModal(prev => ({ ...prev, open: false }))}
+                className="border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800/50"
+              >
+                Cancel
+              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={saveWatchlistChanges}
+                  disabled={isSavingWatchlist}
+                  className={`bg-gradient-to-r ${
+                    editWatchlistModal.market === 'India' 
+                      ? 'from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700' 
+                      : 'from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700'
+                  } text-white font-semibold`}
+                >
+                  {isSavingWatchlist ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Changes'
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </PageWrapper>
