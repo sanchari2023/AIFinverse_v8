@@ -525,40 +525,56 @@ export default function Live_Alerts_US() {
   };
 
   // Function to fetch momentum alerts from API
-  const fetchMomentumAlerts = async () => {
-    try {
-      const momentumResponse = await api.get("/alerts/live/us");
-      console.log("✅ Momentum API called successfully");
-      
-      if (momentumResponse.data && Array.isArray(momentumResponse.data.alerts)) {
-        return momentumResponse.data.alerts.map((alert: any) => ({
-          stock: alert.symbol || alert.stock,
-          symbol: alert.symbol,
-          type: "Momentum Riders (52-week High/Low, All-Time High/Low)",
-          price: alert.price ? `$${typeof alert.price === 'number' ? alert.price.toFixed(2) : alert.price}` : "N/A",
-          change: alert.pct_change !== undefined 
-            ? `${alert.pct_change > 0 ? '+' : ''}${typeof alert.pct_change === 'number' ? alert.pct_change.toFixed(2) : alert.pct_change}%` 
-            : "0%",
-          rsi: alert.rsi ? (typeof alert.rsi === 'number' ? alert.rsi.toFixed(2) : alert.rsi) : "50",
-          rsiStatus: getRsiStatusFromValue(alert.rsi || 50),
-          news: alert.news_link || alert.news || `https://www.cnbc.com/quotes/${alert.symbol}`,
-          chart: alert.tradingview_link || alert.chart || `https://www.tradingview.com/chart/?symbol=${alert.symbol}`,
-          time: alert.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          strategy: "Momentum Riders (52-week High/Low, All-Time High/Low)",
-          date: alert.date || new Date().toISOString().split('T')[0],
-          timestamp: alert.timestamp || new Date().toISOString(),
-          description: alert.description || `${alert.symbol} triggered a 52-week high momentum alert with RSI ${alert.rsi?.toFixed(2) || 'N/A'}.`,
-          marketCap: alert.marketCap || "N/A",
-          trigger: alert.trigger || "52WH"
-        }));
-      }
-    } catch (error) {
-      console.error("Error calling momentum API:", error);
-    }
-    return [];
-  };
+  // Helper function to extract URL from markdown format
+const extractUrlFromMarkdown = (markdown: string) => {
+  if (!markdown) return '#';
+  
+  // Check if it's in [title](url) format
+  const match = markdown.match(/\[.*?\]\((.*?)\)/);
+  if (match && match[1]) {
+    return match[1]; // Return the URL part
+  }
+  
+  // If it's already a plain URL, return as is
+  return markdown;
+};
 
-  // Function to fetch archived alerts from history API
+// Function to fetch momentum alerts from API
+const fetchMomentumAlerts = async () => {
+  try {
+    const momentumResponse = await api.get("/alerts/live/us");
+    console.log("✅ Momentum API called successfully");
+    
+    if (momentumResponse.data && Array.isArray(momentumResponse.data.alerts)) {
+      return momentumResponse.data.alerts.map((alert: any) => ({
+        stock: alert.symbol || alert.stock,
+        symbol: alert.symbol,
+        type: "Momentum Riders (52-week High/Low, All-Time High/Low)",
+        price: alert.price ? `$${typeof alert.price === 'number' ? alert.price.toFixed(2) : alert.price}` : "N/A",
+        change: alert.pct_change !== undefined 
+          ? `${alert.pct_change > 0 ? '+' : ''}${typeof alert.pct_change === 'number' ? alert.pct_change.toFixed(2) : alert.pct_change}%` 
+          : "0%",
+        rsi: alert.rsi ? (typeof alert.rsi === 'number' ? alert.rsi.toFixed(2) : alert.rsi) : "50",
+        rsiStatus: getRsiStatusFromValue(alert.rsi || 50),
+        // Extract URL from markdown format
+        news: alert.news_link ? extractUrlFromMarkdown(alert.news_link) : '#',
+        chart: alert.tradingview_link ? extractUrlFromMarkdown(alert.tradingview_link) : '#',
+        time: alert.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        strategy: "Momentum Riders (52-week High/Low, All-Time High/Low)",
+        date: alert.date || new Date().toISOString().split('T')[0],
+        timestamp: alert.timestamp || new Date().toISOString(),
+        description: alert.description || `${alert.symbol} triggered a 52-week high momentum alert with RSI ${alert.rsi?.toFixed(2) || 'N/A'}.`,
+        marketCap: alert.marketCap || "N/A",
+        trigger: alert.trigger || "52WH"
+      }));
+    }
+  } catch (error) {
+    console.error("Error calling momentum API:", error);
+  }
+  return [];
+};
+
+// Function to fetch archived alerts from history API
 const fetchArchivedAlerts = async () => {
   try {
     const response = await api.get("/alerts/history/us");
@@ -568,13 +584,10 @@ const fetchArchivedAlerts = async () => {
     let alertsArray = [];
     
     if (response.data && Array.isArray(response.data)) {
-      // If response is directly an array
       alertsArray = response.data;
     } else if (response.data && Array.isArray(response.data.alerts)) {
-      // If response has alerts property
       alertsArray = response.data.alerts;
     } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
-      // If response has data property
       alertsArray = response.data.data;
     }
     
@@ -585,11 +598,12 @@ const fetchArchivedAlerts = async () => {
         price: alert.price ? `$${typeof alert.price === 'number' ? alert.price.toFixed(2) : alert.price}` : "N/A",
         change: alert.pct_change !== undefined 
           ? `${alert.pct_change > 0 ? '+' : ''}${typeof alert.pct_change === 'number' ? alert.pct_change.toFixed(2) : alert.pct_change}%` 
-          : alert.change || "0%",
+          : "0%",
         rsi: alert.rsi ? (typeof alert.rsi === 'number' ? alert.rsi.toFixed(2) : alert.rsi) : "50",
         rsiStatus: getRsiStatusFromValue(alert.rsi || 50),
-        news: alert.news_link || alert.news || `https://www.cnbc.com/quotes/${alert.symbol || ''}`,
-        chart: alert.tradingview_link || alert.chart || `https://www.tradingview.com/chart/?symbol=${alert.symbol || ''}`,
+        // Extract URL from markdown format
+        news: alert.news_link ? extractUrlFromMarkdown(alert.news_link) : '#',
+        chart: alert.tradingview_link ? extractUrlFromMarkdown(alert.tradingview_link) : '#',
         time: alert.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         strategy: alert.strategy || alert.type || "Momentum Riders (52-week High/Low, All-Time High/Low)",
         date: alert.date || new Date().toISOString().split('T')[0],

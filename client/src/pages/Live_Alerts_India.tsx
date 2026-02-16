@@ -498,98 +498,116 @@ export default function Live_Alerts_India() {
     return "NEUTRAL";
   };
 
-  // Function to fetch momentum alerts from API
-  const fetchMomentumAlerts = async () => {
-    try {
-      const momentumResponse = await api.get("/alerts/live/india");
-      console.log("✅ Momentum API called successfully");
-      
-      if (momentumResponse.data && Array.isArray(momentumResponse.data.alerts)) {
-        return momentumResponse.data.alerts.map((alert: any) => {
-          // Handle stock symbol with .NS suffix
-          let stockSymbol = alert.symbol || alert.stock || 'N/A';
-          // Remove .NS suffix if present for matching
-          const cleanSymbol = stockSymbol.replace('.NS', '');
-          
-          return {
-            stock: cleanSymbol, // Store without .NS for matching
-            originalSymbol: stockSymbol,
-            symbol: alert.symbol,
-            type: "Momentum Riders (52-week High/Low, All-Time High/Low)",
-            price: alert.price ? `₹${typeof alert.price === 'number' ? alert.price.toFixed(2) : alert.price}` : "N/A",
-            change: alert.pct_change !== undefined 
-              ? `${alert.pct_change > 0 ? '+' : ''}${typeof alert.pct_change === 'number' ? alert.pct_change.toFixed(2) : alert.pct_change}%` 
-              : "0%",
-            rsi: alert.rsi ? (typeof alert.rsi === 'number' ? alert.rsi.toFixed(2) : alert.rsi) : "50",
-            rsiStatus: getRsiStatusFromValue(alert.rsi || 50),
-            news: alert.news_link || alert.news || `https://economictimes.indiatimes.com/${cleanSymbol.toLowerCase()}`,
-            chart: alert.tradingview_link || alert.chart || `https://in.tradingview.com/chart/?symbol=NSE%3A${cleanSymbol}`,
-            time: alert.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            strategy: "Momentum Riders (52-week High/Low, All-Time High/Low)",
-            date: alert.date || new Date().toISOString().split('T')[0],
-            timestamp: alert.timestamp || new Date().toISOString(),
-            description: alert.description || `${cleanSymbol} triggered a 52-week high momentum alert with RSI ${alert.rsi?.toFixed(2) || 'N/A'}.`,
-            marketCap: alert.marketCap || "N/A"
-          };
-        });
-      }
-    } catch (error) {
-      console.error("Error calling momentum API:", error);
-    }
-    return [];
-  };
 
-  // Function to fetch archived alerts from history API
-  const fetchArchivedAlerts = async () => {
-    try {
-      const response = await api.get("/alerts/history/india");
-      console.log("✅ Archived alerts API called successfully", response.data);
-      
-      // Handle different possible response structures
-      let alertsArray = [];
-      
-      if (response.data && Array.isArray(response.data)) {
-        alertsArray = response.data;
-      } else if (response.data && Array.isArray(response.data.alerts)) {
-        alertsArray = response.data.alerts;
-      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        alertsArray = response.data.data;
-      }
-      
-      if (alertsArray.length > 0) {
-        return alertsArray.map((alert: any) => {
-          // Handle stock symbol with .NS suffix
-          let stockSymbol = alert.symbol || alert.stock || 'N/A';
-          // Remove .NS suffix if present for matching
-          const cleanSymbol = stockSymbol.replace('.NS', '');
-          
-          return {
-            stock: cleanSymbol, // Store without .NS for matching
-            originalSymbol: stockSymbol, // Keep original if needed
-            type: alert.type || alert.strategy || "Momentum Riders (52-week High/Low, All-Time High/Low)",
-            price: alert.price ? `₹${typeof alert.price === 'number' ? alert.price.toFixed(2) : alert.price}` : "N/A",
-            change: alert.pct_change !== undefined 
-              ? `${alert.pct_change > 0 ? '+' : ''}${typeof alert.pct_change === 'number' ? alert.pct_change.toFixed(2) : alert.pct_change}%` 
-              : alert.change || "0%",
-            rsi: alert.rsi ? (typeof alert.rsi === 'number' ? alert.rsi.toFixed(2) : alert.rsi) : "50",
-            rsiStatus: getRsiStatusFromValue(alert.rsi || 50),
-            news: alert.news_link || alert.news || `https://economictimes.indiatimes.com/${cleanSymbol.toLowerCase()}`,
-            chart: alert.tradingview_link || alert.chart || `https://in.tradingview.com/chart/?symbol=NSE%3A${cleanSymbol}`,
-            time: alert.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            strategy: alert.strategy || alert.type || "Momentum Riders (52-week High/Low, All-Time High/Low)",
-            date: alert.date || new Date().toISOString().split('T')[0],
-            timestamp: alert.timestamp || alert.created_at || new Date().toISOString(),
-            description: alert.description || `${cleanSymbol} triggered an alert.`,
-            marketCap: alert.marketCap || "N/A",
-            trigger: alert.trigger || "ALERT"
-          };
-        });
-      }
-    } catch (error) {
-      console.error("Error calling archived alerts API:", error);
+  // Add this helper function near the top of your component (around line 50-100)
+// Helper function to extract URL from markdown format
+const extractUrlFromMarkdown = (markdown: string) => {
+  if (!markdown) return '#';
+  
+  // Check if it's in [title](url) format
+  const match = markdown.match(/\[.*?\]\((.*?)\)/);
+  if (match && match[1]) {
+    return match[1]; // Return the URL part
+  }
+  
+  // If it's already a plain URL, return as is
+  return markdown;
+};
+
+// Function to fetch momentum alerts from API
+const fetchMomentumAlerts = async () => {
+  try {
+    const momentumResponse = await api.get("/alerts/live/india");
+    console.log("✅ Momentum API called successfully");
+    
+    if (momentumResponse.data && Array.isArray(momentumResponse.data.alerts)) {
+      return momentumResponse.data.alerts.map((alert: any) => {
+        // Handle stock symbol with .NS suffix
+        let stockSymbol = alert.symbol || alert.stock || 'N/A';
+        // Remove .NS suffix if present for matching
+        const cleanSymbol = stockSymbol.replace('.NS', '');
+        
+        return {
+          stock: cleanSymbol, // Store without .NS for matching
+          originalSymbol: stockSymbol,
+          symbol: alert.symbol,
+          type: "Momentum Riders (52-week High/Low, All-Time High/Low)",
+          price: alert.price ? `₹${typeof alert.price === 'number' ? alert.price.toFixed(2) : alert.price}` : "N/A",
+          change: alert.pct_change !== undefined 
+            ? `${alert.pct_change > 0 ? '+' : ''}${typeof alert.pct_change === 'number' ? alert.pct_change.toFixed(2) : alert.pct_change}%` 
+            : "0%",
+          rsi: alert.rsi ? (typeof alert.rsi === 'number' ? alert.rsi.toFixed(2) : alert.rsi) : "50",
+          rsiStatus: getRsiStatusFromValue(alert.rsi || 50),
+          // Extract URL from markdown format
+          news: alert.news_link ? extractUrlFromMarkdown(alert.news_link) : '#',
+          chart: alert.tradingview_link ? extractUrlFromMarkdown(alert.tradingview_link) : '#',
+          time: alert.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          strategy: "Momentum Riders (52-week High/Low, All-Time High/Low)",
+          date: alert.date || new Date().toISOString().split('T')[0],
+          timestamp: alert.timestamp || new Date().toISOString(),
+          description: alert.description || `${cleanSymbol} triggered a 52-week high momentum alert with RSI ${alert.rsi?.toFixed(2) || 'N/A'}.`,
+          marketCap: alert.marketCap || "N/A"
+        };
+      });
     }
-    return [];
-  };
+  } catch (error) {
+    console.error("Error calling momentum API:", error);
+  }
+  return [];
+};
+
+// Function to fetch archived alerts from history API
+const fetchArchivedAlerts = async () => {
+  try {
+    const response = await api.get("/alerts/history/india");
+    console.log("✅ Archived alerts API called successfully", response.data);
+    
+    // Handle different possible response structures
+    let alertsArray = [];
+    
+    if (response.data && Array.isArray(response.data)) {
+      alertsArray = response.data;
+    } else if (response.data && Array.isArray(response.data.alerts)) {
+      alertsArray = response.data.alerts;
+    } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+      alertsArray = response.data.data;
+    }
+    
+    if (alertsArray.length > 0) {
+      return alertsArray.map((alert: any) => {
+        // Handle stock symbol with .NS suffix
+        let stockSymbol = alert.symbol || alert.stock || 'N/A';
+        // Remove .NS suffix if present for matching
+        const cleanSymbol = stockSymbol.replace('.NS', '');
+        
+        return {
+          stock: cleanSymbol, // Store without .NS for matching
+          originalSymbol: stockSymbol, // Keep original if needed
+          type: alert.type || alert.strategy || "Momentum Riders (52-week High/Low, All-Time High/Low)",
+          price: alert.price ? `₹${typeof alert.price === 'number' ? alert.price.toFixed(2) : alert.price}` : "N/A",
+          change: alert.pct_change !== undefined 
+            ? `${alert.pct_change > 0 ? '+' : ''}${typeof alert.pct_change === 'number' ? alert.pct_change.toFixed(2) : alert.pct_change}%` 
+            : alert.change || "0%",
+          rsi: alert.rsi ? (typeof alert.rsi === 'number' ? alert.rsi.toFixed(2) : alert.rsi) : "50",
+          rsiStatus: getRsiStatusFromValue(alert.rsi || 50),
+          // Extract URL from markdown format
+          news: alert.news_link ? extractUrlFromMarkdown(alert.news_link) : '#',
+          chart: alert.tradingview_link ? extractUrlFromMarkdown(alert.tradingview_link) : '#',
+          time: alert.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          strategy: alert.strategy || alert.type || "Momentum Riders (52-week High/Low, All-Time High/Low)",
+          date: alert.date || new Date().toISOString().split('T')[0],
+          timestamp: alert.timestamp || alert.created_at || new Date().toISOString(),
+          description: alert.description || `${cleanSymbol} triggered an alert.`,
+          marketCap: alert.marketCap || "N/A",
+          trigger: alert.trigger || "ALERT"
+        };
+      });
+    }
+  } catch (error) {
+    console.error("Error calling archived alerts API:", error);
+  }
+  return [];
+};
 
   // Filter archive groups based on watchlist stocks AND search query
   useEffect(() => {
