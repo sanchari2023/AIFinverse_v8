@@ -119,7 +119,8 @@ export default function Live_Alerts_India() {
           { company_name: "ITC Limited", base_symbol: "ITC" },
           { company_name: "Bharti Airtel Limited", base_symbol: "BHARTIARTL" },
           { company_name: "Larsen & Toubro Limited", base_symbol: "LT" },
-          { company_name: "Kotak Mahindra Bank Limited", base_symbol: "KOTAKBANK" }
+          { company_name: "Kotak Mahindra Bank Limited", base_symbol: "KOTAKBANK" },
+          { company_name: "Tata Steel Limited", base_symbol: "TATASTEEL" }
         ];
         setIndiaStocks(sampleStocks);
         setFilteredStocks(sampleStocks);
@@ -156,7 +157,7 @@ export default function Live_Alerts_India() {
     );
   };
 
-  // Handle adding stocks
+  // Handle adding stocks - UPDATED with archive refresh
   const handleAddStocks = async () => {
     try {
       const userProfile = localStorage.getItem("userProfile");
@@ -206,7 +207,32 @@ export default function Live_Alerts_India() {
       setSearchAlertQuery("");
       
       alert(`Successfully added ${newStocksToAdd.length} stock(s) to India watchlist!`);
-      refreshWatchlistFromBackend();
+      
+      // Refresh watchlist from backend
+      await refreshWatchlistFromBackend();
+      
+      // AFTER adding stocks, refresh archive alerts with the new watchlist
+      const watchlistSymbols = [...watchlist, ...addedStocks].map(item => item.base_symbol);
+      const archivedAlertsData = await fetchArchivedAlerts();
+      
+      const watchlistArchived = archivedAlertsData.filter(alert => 
+        watchlistSymbols.includes(alert.stock)
+      );
+      
+      const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
+        const date = alert.date;
+        if (!groups[date]) {
+          groups[date] = [];
+        }
+        groups[date].push(alert);
+        return groups;
+      }, {});
+      
+      const archivedArray = Object.entries(groupedArchived)
+        .map(([date, alerts]) => ({ date, alerts }))
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      setArchivedAlerts(archivedArray);
       
     } catch (error: any) {
       console.error("Add stocks error:", error);
@@ -214,7 +240,7 @@ export default function Live_Alerts_India() {
     }
   };
 
-  // Refresh watchlist from backend
+  // Refresh watchlist from backend - UPDATED with archive refresh
   const refreshWatchlistFromBackend = async () => {
     try {
       const userProfile = localStorage.getItem("userProfile");
@@ -227,6 +253,29 @@ export default function Live_Alerts_India() {
         if (userData.watchlist && userData.watchlist.India) {
           setWatchlist(userData.watchlist.India);
           console.log("✅ India Watchlist refreshed from backend:", userData.watchlist.India.length, "items");
+          
+          // Also refresh archive alerts with new watchlist
+          const watchlistSymbols = userData.watchlist.India.map((item: WatchlistItem) => item.base_symbol);
+          const archivedAlertsData = await fetchArchivedAlerts();
+          
+          const watchlistArchived = archivedAlertsData.filter(alert => 
+            watchlistSymbols.includes(alert.stock)
+          );
+          
+          const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
+            const date = alert.date;
+            if (!groups[date]) {
+              groups[date] = [];
+            }
+            groups[date].push(alert);
+            return groups;
+          }, {});
+          
+          const archivedArray = Object.entries(groupedArchived)
+            .map(([date, alerts]) => ({ date, alerts }))
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          
+          setArchivedAlerts(archivedArray);
         }
       }
     } catch (error) {
@@ -283,7 +332,7 @@ export default function Live_Alerts_India() {
         news: "https://economictimes.indiatimes.com/reliance-industries-ltd/stocks/companyid-13215.cms",
         chart: "https://in.tradingview.com/chart/?symbol=NSE%3ARELIANCE",
         time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " IST",
-        strategy: "Momentum Riders",
+        strategy: "Momentum Riders (52-week High/Low, All-Time High/Low)",
         date: now.toISOString().split('T')[0],
         description: "Reliance Industries showing strong momentum with breakout above ₹2,800 level.",
         volume: "15.2M",
@@ -402,7 +451,7 @@ export default function Live_Alerts_India() {
         news: "https://economictimes.indiatimes.com/bharti-airtel-ltd/stocks/companyid-11671.cms",
         chart: "https://in.tradingview.com/chart/?symbol=NSE%3ABHARTIARTL",
         time: twoDaysAgo.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " IST",
-        strategy: "Momentum Riders",
+        strategy: "Momentum Riders (52-week High/Low, All-Time High/Low)",
         date: twoDaysAgo.toISOString().split('T')[0],
         description: "Bharti Airtel at 52-week high on tariff hike expectations.",
         volume: "14.2M",
@@ -410,20 +459,20 @@ export default function Live_Alerts_India() {
         timestamp: twoDaysAgo.toISOString()
       },
       {
-        stock: "BAJFINANCE",
+        stock: "TATASTEEL",
         type: "Mean Reversion",
-        price: "₹7,125.80",
-        change: "-1.34%",
-        rsi: "32.8",
+        price: "₹145.80",
+        change: "-2.34%",
+        rsi: "29.8",
         rsiStatus: "OVERSOLD",
-        news: "https://economictimes.indiatimes.com/bajaj-finance-ltd/stocks/companyid-13238.cms",
-        chart: "https://in.tradingview.com/chart/?symbol=NSE%3ABAJFINANCE",
+        news: "https://economictimes.indiatimes.com/tata-steel-ltd/stocks/companyid-11877.cms",
+        chart: "https://in.tradingview.com/chart/?symbol=NSE%3ATATASTEEL",
         time: threeDaysAgo.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " IST",
         strategy: "Mean Reversion",
         date: threeDaysAgo.toISOString().split('T')[0],
-        description: "Bajaj Finance oversold after 12% correction.",
-        volume: "5.9M",
-        marketCap: "₹4.3T",
+        description: "Tata Steel oversold with RSI below 30. Potential bounce back.",
+        volume: "45.6M",
+        marketCap: "₹1.8T",
         timestamp: threeDaysAgo.toISOString()
       }
     ];
@@ -456,28 +505,88 @@ export default function Live_Alerts_India() {
       console.log("✅ Momentum API called successfully");
       
       if (momentumResponse.data && Array.isArray(momentumResponse.data.alerts)) {
-        return momentumResponse.data.alerts.map((alert: any) => ({
-          stock: alert.symbol || alert.stock,
-          symbol: alert.symbol,
-          type: "Momentum Riders (52-week High/Low, All-Time High/Low)",
-          price: alert.price ? `₹${typeof alert.price === 'number' ? alert.price.toFixed(2) : alert.price}` : "N/A",
-          change: alert.pct_change !== undefined 
-            ? `${alert.pct_change > 0 ? '+' : ''}${typeof alert.pct_change === 'number' ? alert.pct_change.toFixed(2) : alert.pct_change}%` 
-            : "0%",
-          rsi: alert.rsi ? (typeof alert.rsi === 'number' ? alert.rsi.toFixed(2) : alert.rsi) : "50",
-          rsiStatus: getRsiStatusFromValue(alert.rsi || 50),
-          news: alert.news_link || alert.news || `https://economictimes.indiatimes.com/${alert.symbol?.toLowerCase()}`,
-          chart: alert.tradingview_link || alert.chart || `https://in.tradingview.com/chart/?symbol=NSE%3A${alert.symbol}`,
-          time: alert.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          strategy: "Momentum Riders",
-          date: alert.date || new Date().toISOString().split('T')[0],
-          timestamp: alert.timestamp || new Date().toISOString(),
-          description: alert.description || `${alert.symbol} triggered a 52-week high momentum alert with RSI ${alert.rsi?.toFixed(2) || 'N/A'}.`,
-          marketCap: alert.marketCap || "N/A"
-        }));
+        return momentumResponse.data.alerts.map((alert: any) => {
+          // Handle stock symbol with .NS suffix
+          let stockSymbol = alert.symbol || alert.stock || 'N/A';
+          // Remove .NS suffix if present for matching
+          const cleanSymbol = stockSymbol.replace('.NS', '');
+          
+          return {
+            stock: cleanSymbol, // Store without .NS for matching
+            originalSymbol: stockSymbol,
+            symbol: alert.symbol,
+            type: "Momentum Riders (52-week High/Low, All-Time High/Low)",
+            price: alert.price ? `₹${typeof alert.price === 'number' ? alert.price.toFixed(2) : alert.price}` : "N/A",
+            change: alert.pct_change !== undefined 
+              ? `${alert.pct_change > 0 ? '+' : ''}${typeof alert.pct_change === 'number' ? alert.pct_change.toFixed(2) : alert.pct_change}%` 
+              : "0%",
+            rsi: alert.rsi ? (typeof alert.rsi === 'number' ? alert.rsi.toFixed(2) : alert.rsi) : "50",
+            rsiStatus: getRsiStatusFromValue(alert.rsi || 50),
+            news: alert.news_link || alert.news || `https://economictimes.indiatimes.com/${cleanSymbol.toLowerCase()}`,
+            chart: alert.tradingview_link || alert.chart || `https://in.tradingview.com/chart/?symbol=NSE%3A${cleanSymbol}`,
+            time: alert.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            strategy: "Momentum Riders (52-week High/Low, All-Time High/Low)",
+            date: alert.date || new Date().toISOString().split('T')[0],
+            timestamp: alert.timestamp || new Date().toISOString(),
+            description: alert.description || `${cleanSymbol} triggered a 52-week high momentum alert with RSI ${alert.rsi?.toFixed(2) || 'N/A'}.`,
+            marketCap: alert.marketCap || "N/A"
+          };
+        });
       }
     } catch (error) {
       console.error("Error calling momentum API:", error);
+    }
+    return [];
+  };
+
+  // Function to fetch archived alerts from history API
+  const fetchArchivedAlerts = async () => {
+    try {
+      const response = await api.get("/alerts/history/india");
+      console.log("✅ Archived alerts API called successfully", response.data);
+      
+      // Handle different possible response structures
+      let alertsArray = [];
+      
+      if (response.data && Array.isArray(response.data)) {
+        alertsArray = response.data;
+      } else if (response.data && Array.isArray(response.data.alerts)) {
+        alertsArray = response.data.alerts;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        alertsArray = response.data.data;
+      }
+      
+      if (alertsArray.length > 0) {
+        return alertsArray.map((alert: any) => {
+          // Handle stock symbol with .NS suffix
+          let stockSymbol = alert.symbol || alert.stock || 'N/A';
+          // Remove .NS suffix if present for matching
+          const cleanSymbol = stockSymbol.replace('.NS', '');
+          
+          return {
+            stock: cleanSymbol, // Store without .NS for matching
+            originalSymbol: stockSymbol, // Keep original if needed
+            type: alert.type || alert.strategy || "Momentum Riders (52-week High/Low, All-Time High/Low)",
+            price: alert.price ? `₹${typeof alert.price === 'number' ? alert.price.toFixed(2) : alert.price}` : "N/A",
+            change: alert.pct_change !== undefined 
+              ? `${alert.pct_change > 0 ? '+' : ''}${typeof alert.pct_change === 'number' ? alert.pct_change.toFixed(2) : alert.pct_change}%` 
+              : alert.change || "0%",
+            rsi: alert.rsi ? (typeof alert.rsi === 'number' ? alert.rsi.toFixed(2) : alert.rsi) : "50",
+            rsiStatus: getRsiStatusFromValue(alert.rsi || 50),
+            news: alert.news_link || alert.news || `https://economictimes.indiatimes.com/${cleanSymbol.toLowerCase()}`,
+            chart: alert.tradingview_link || alert.chart || `https://in.tradingview.com/chart/?symbol=NSE%3A${cleanSymbol}`,
+            time: alert.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            strategy: alert.strategy || alert.type || "Momentum Riders (52-week High/Low, All-Time High/Low)",
+            date: alert.date || new Date().toISOString().split('T')[0],
+            timestamp: alert.timestamp || alert.created_at || new Date().toISOString(),
+            description: alert.description || `${cleanSymbol} triggered an alert.`,
+            marketCap: alert.marketCap || "N/A",
+            trigger: alert.trigger || "ALERT"
+          };
+        });
+      }
+    } catch (error) {
+      console.error("Error calling archived alerts API:", error);
     }
     return [];
   };
@@ -490,7 +599,9 @@ export default function Live_Alerts_India() {
       .map(group => ({
         date: group.date,
         alerts: group.alerts.filter((alert: any) => 
-          watchlistSymbols.includes(alert.stock)
+          // Check both clean symbol and original symbol with .NS
+          watchlistSymbols.includes(alert.stock) || 
+          (alert.originalSymbol && watchlistSymbols.includes(alert.originalSymbol.replace('.NS', '')))
         )
       }))
       .filter(group => group.alerts.length > 0);
@@ -504,7 +615,7 @@ export default function Live_Alerts_India() {
           date: group.date,
           alerts: group.alerts.filter((alert: any) => 
             alert.stock.toLowerCase().includes(query) ||
-            (alert.symbol && alert.symbol.toLowerCase().includes(query))
+            (alert.originalSymbol && alert.originalSymbol.toLowerCase().includes(query))
           )
         }))
         .filter(group => group.alerts.length > 0);
@@ -513,7 +624,7 @@ export default function Live_Alerts_India() {
     }
   }, [archiveSearchQuery, archivedAlerts, watchlist]);
 
-  // MAIN LOAD FUNCTION - CRITICAL FIX: Load watchlist FIRST
+  // MAIN LOAD FUNCTION - Load watchlist and alerts
   useEffect(() => {
     const loadUserPreferences = async () => {
       try {
@@ -539,7 +650,7 @@ export default function Live_Alerts_India() {
         
         const userId = profile.userId || profile.user_id || localStorage.getItem("userId");
         
-        // CRITICAL FIX: FIRST load watchlist
+        // Load watchlist first
         let userWatchlist: WatchlistItem[] = [];
         if (userId) {
           try {
@@ -588,7 +699,7 @@ export default function Live_Alerts_India() {
                 localStorage.setItem("alertPreferencesIndia", JSON.stringify(indiaStrategies));
                 setSelectedAlertTypes(indiaStrategies);
                 
-                // Get watchlist symbols (use the one we already loaded)
+                // Get watchlist symbols
                 const watchlistSymbols = userWatchlist.map(item => item.base_symbol);
                 
                 // If no watchlist stocks, show empty
@@ -599,85 +710,64 @@ export default function Live_Alerts_India() {
                   return;
                 }
                 
-                // CHECK: If Momentum strategy is selected, fetch live alerts
+                // Fetch archive alerts FIRST (independent of strategies)
+                const archivedAlertsData = await fetchArchivedAlerts();
+                console.log("📦 Raw archived alerts data:", archivedAlertsData);
+                console.log("📊 Watchlist symbols:", watchlistSymbols);
+                
+                // Filter archived alerts to watchlist stocks and group by date
+                const watchlistArchived = archivedAlertsData.filter(alert => 
+                  watchlistSymbols.includes(alert.stock)
+                );
+                console.log("🔍 Filtered watchlist archived alerts:", watchlistArchived);
+                
+                const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
+                  const date = alert.date;
+                  if (!groups[date]) {
+                    groups[date] = [];
+                  }
+                  groups[date].push(alert);
+                  return groups;
+                }, {});
+                
+                const archivedArray = Object.entries(groupedArchived)
+                  .map(([date, alerts]) => ({ date, alerts }))
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                
+                setArchivedAlerts(archivedArray);
+                
+                // Now handle live alerts for center section (original logic)
                 if (indiaStrategies.includes("Momentum Riders (52-week High/Low, All-Time High/Low)")) {
                   console.log("Momentum strategy is active, fetching live alerts...");
                   const momentumAlertsData = await fetchMomentumAlerts();
                   
-                  // Filter to ONLY watchlist stocks
                   const watchlistOnlyAlerts = momentumAlertsData.filter(alert => 
                     watchlistSymbols.includes(alert.stock)
                   );
                   
-                  // Sort by timestamp (newest first)
                   const sortedAlerts = watchlistOnlyAlerts.sort((a, b) => 
                     new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
                   );
                   
-                  // Take ONLY the latest 10 alerts for center section
                   const latestAlerts = sortedAlerts.slice(0, 10);
                   
-                  // ALL remaining alerts go to archive
-                  const remainingAlerts = sortedAlerts.slice(10);
-                  
-                  console.log(`Center: ${latestAlerts.length}, Archive: ${remainingAlerts.length}`);
-                  
-                  // Group remaining alerts by date
-                  const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-                    const date = alert.date;
-                    if (!groups[date]) {
-                      groups[date] = [];
-                    }
-                    groups[date].push(alert);
-                    return groups;
-                  }, {});
-                  
-                  const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-                    .map(([date, alerts]) => ({ date, alerts }))
-                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                  
                   setAlertsData(latestAlerts);
-                  setArchivedAlerts(archivedAlertsArray);
                 } else {
-                  // If Momentum is not selected, only show hardcoded alerts
                   const filteredAlerts = hardcodedAlerts.filter(alert => 
                     indiaStrategies.includes(alert.type)
                   );
                   
-                  // Sort by timestamp
                   const sortedAlerts = filteredAlerts.sort((a, b) => 
                     new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
                   );
                   
-                  // Filter to ONLY watchlist stocks
                   const watchlistOnlyAlerts = sortedAlerts.filter(alert => 
                     watchlistSymbols.includes(alert.stock)
                   );
                   
-                  // Take ONLY the latest 10 alerts for center section
                   const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
                   
-                  // ALL remaining alerts go to archive
-                  const remainingAlerts = watchlistOnlyAlerts.slice(10);
-                  
-                  console.log(`Center: ${latestAlerts.length}, Archive: ${remainingAlerts.length}`);
-                  
-                  // Group remaining alerts by date
-                  const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-                    const date = alert.date;
-                    if (!groups[date]) {
-                      groups[date] = [];
-                    }
-                    groups[date].push(alert);
-                    return groups;
-                  }, {});
-                  
-                  const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-                    .map(([date, alerts]) => ({ date, alerts }))
-                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                  
                   setAlertsData(latestAlerts);
-                  setArchivedAlerts(archivedAlertsArray);
                 }
                 
                 setIsLoading(false);
@@ -689,7 +779,7 @@ export default function Live_Alerts_India() {
           }
         }
         
-        // 5. Fallback to localStorage
+        // Fallback to localStorage
         const savedIndiaPrefs = localStorage.getItem("alertPreferencesIndia");
         
         if (savedIndiaPrefs) {
@@ -699,10 +789,8 @@ export default function Live_Alerts_India() {
               indiaStrategies = parsed;
               setSelectedAlertTypes(parsed);
               
-              // Get watchlist symbols
               const watchlistSymbols = userWatchlist.map(item => item.base_symbol);
               
-              // If no watchlist stocks, show empty
               if (watchlistSymbols.length === 0) {
                 setAlertsData([]);
                 setArchivedAlerts([]);
@@ -710,83 +798,60 @@ export default function Live_Alerts_India() {
                 return;
               }
               
-              // CHECK: If Momentum strategy is selected, fetch live alerts
+              // Fetch archive alerts
+              const archivedAlertsData = await fetchArchivedAlerts();
+              
+              const watchlistArchived = archivedAlertsData.filter(alert => 
+                watchlistSymbols.includes(alert.stock)
+              );
+              
+              const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
+                const date = alert.date;
+                if (!groups[date]) {
+                  groups[date] = [];
+                }
+                groups[date].push(alert);
+                return groups;
+              }, {});
+              
+              const archivedArray = Object.entries(groupedArchived)
+                .map(([date, alerts]) => ({ date, alerts }))
+                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              
+              setArchivedAlerts(archivedArray);
+              
+              // Handle live alerts
               if (parsed.includes("Momentum Riders (52-week High/Low, All-Time High/Low)")) {
                 console.log("Momentum strategy is active in localStorage, fetching live alerts...");
                 const momentumAlertsData = await fetchMomentumAlerts();
                 
-                // Filter to ONLY watchlist stocks
                 const watchlistOnlyAlerts = momentumAlertsData.filter(alert => 
                   watchlistSymbols.includes(alert.stock)
                 );
                 
-                // Sort by timestamp
                 const sortedAlerts = watchlistOnlyAlerts.sort((a, b) => 
                   new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
                 );
                 
-                // Take ONLY the latest 10 alerts for center section
                 const latestAlerts = sortedAlerts.slice(0, 10);
                 
-                // ALL remaining alerts go to archive
-                const remainingAlerts = sortedAlerts.slice(10);
-                
-                console.log(`Center: ${latestAlerts.length}, Archive: ${remainingAlerts.length}`);
-                
-                const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-                  const date = alert.date;
-                  if (!groups[date]) {
-                    groups[date] = [];
-                  }
-                  groups[date].push(alert);
-                  return groups;
-                }, {});
-                
-                const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-                  .map(([date, alerts]) => ({ date, alerts }))
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                
                 setAlertsData(latestAlerts);
-                setArchivedAlerts(archivedAlertsArray);
               } else {
-                // If Momentum is not selected, only show hardcoded alerts
                 const filteredAlerts = hardcodedAlerts.filter(alert => 
                   parsed.includes(alert.type)
                 );
                 
-                // Sort by timestamp
                 const sortedAlerts = filteredAlerts.sort((a, b) => 
                   new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
                 );
                 
-                // Filter to ONLY watchlist stocks
                 const watchlistOnlyAlerts = sortedAlerts.filter(alert => 
                   watchlistSymbols.includes(alert.stock)
                 );
                 
-                // Take ONLY the latest 10 alerts for center section
                 const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
                 
-                // ALL remaining alerts go to archive
-                const remainingAlerts = watchlistOnlyAlerts.slice(10);
-                
-                console.log(`Center: ${latestAlerts.length}, Archive: ${remainingAlerts.length}`);
-                
-                const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-                  const date = alert.date;
-                  if (!groups[date]) {
-                    groups[date] = [];
-                  }
-                  groups[date].push(alert);
-                  return groups;
-                }, {});
-                
-                const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-                  .map(([date, alerts]) => ({ date, alerts }))
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                
                 setAlertsData(latestAlerts);
-                setArchivedAlerts(archivedAlertsArray);
               }
               
               setIsLoading(false);
@@ -797,7 +862,7 @@ export default function Live_Alerts_India() {
           }
         }
         
-        // 6. If fresh registration
+        // Fresh registration
         const isFreshRegistration = localStorage.getItem("freshRegistration") === "true";
         
         if (isFreshRegistration && savedMarket === "India") {
@@ -825,10 +890,8 @@ export default function Live_Alerts_India() {
               localStorage.setItem("alertPreferencesIndia", JSON.stringify(registrationStrategies));
               setSelectedAlertTypes(registrationStrategies);
               
-              // Get watchlist symbols
               const watchlistSymbols = userWatchlist.map(item => item.base_symbol);
               
-              // If no watchlist stocks, show empty
               if (watchlistSymbols.length === 0) {
                 setAlertsData([]);
                 setArchivedAlerts([]);
@@ -836,6 +899,29 @@ export default function Live_Alerts_India() {
                 return;
               }
               
+              // Fetch archive alerts
+              const archivedAlertsData = await fetchArchivedAlerts();
+              
+              const watchlistArchived = archivedAlertsData.filter(alert => 
+                watchlistSymbols.includes(alert.stock)
+              );
+              
+              const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
+                const date = alert.date;
+                if (!groups[date]) {
+                  groups[date] = [];
+                }
+                groups[date].push(alert);
+                return groups;
+              }, {});
+              
+              const archivedArray = Object.entries(groupedArchived)
+                .map(([date, alerts]) => ({ date, alerts }))
+                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              
+              setArchivedAlerts(archivedArray);
+              
+              // Handle live alerts
               if (registrationStrategies.includes("Momentum Riders (52-week High/Low, All-Time High/Low)")) {
                 console.log("Momentum strategy selected in fresh registration, fetching live alerts...");
                 const momentumAlertsData = await fetchMomentumAlerts();
@@ -849,23 +935,8 @@ export default function Live_Alerts_India() {
                 );
                 
                 const latestAlerts = sortedAlerts.slice(0, 10);
-                const remainingAlerts = sortedAlerts.slice(10);
-                
-                const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-                  const date = alert.date;
-                  if (!groups[date]) {
-                    groups[date] = [];
-                  }
-                  groups[date].push(alert);
-                  return groups;
-                }, {});
-                
-                const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-                  .map(([date, alerts]) => ({ date, alerts }))
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                 
                 setAlertsData(latestAlerts);
-                setArchivedAlerts(archivedAlertsArray);
               } else {
                 const filteredAlerts = hardcodedAlerts.filter(alert => 
                   registrationStrategies.includes(alert.type)
@@ -880,23 +951,8 @@ export default function Live_Alerts_India() {
                 );
                 
                 const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
-                const remainingAlerts = watchlistOnlyAlerts.slice(10);
-                
-                const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-                  const date = alert.date;
-                  if (!groups[date]) {
-                    groups[date] = [];
-                  }
-                  groups[date].push(alert);
-                  return groups;
-                }, {});
-                
-                const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-                  .map(([date, alerts]) => ({ date, alerts }))
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                 
                 setAlertsData(latestAlerts);
-                setArchivedAlerts(archivedAlertsArray);
               }
               
               localStorage.removeItem("freshRegistration");
@@ -908,15 +964,13 @@ export default function Live_Alerts_India() {
           }
         }
         
-        // Default fallback - use hardcoded alerts
+        // Default fallback
         const sortedAlerts = hardcodedAlerts.sort((a, b) => 
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         );
         
-        // Get watchlist symbols
         const watchlistSymbols = userWatchlist.map(item => item.base_symbol);
         
-        // If no watchlist stocks, show empty
         if (watchlistSymbols.length === 0) {
           setAlertsData([]);
           setArchivedAlerts([]);
@@ -924,20 +978,14 @@ export default function Live_Alerts_India() {
           return;
         }
         
-        // Filter to ONLY watchlist stocks
-        const watchlistOnlyAlerts = sortedAlerts.filter(alert => 
+        // Fetch archive alerts
+        const archivedAlertsData = await fetchArchivedAlerts();
+        
+        const watchlistArchived = archivedAlertsData.filter(alert => 
           watchlistSymbols.includes(alert.stock)
         );
         
-        // Take ONLY the latest 10 alerts for center section
-        const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
-        
-        // ALL remaining alerts go to archive
-        const remainingAlerts = watchlistOnlyAlerts.slice(10);
-        
-        console.log(`Center: ${latestAlerts.length}, Archive: ${remainingAlerts.length}`);
-        
-        const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
+        const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
           const date = alert.date;
           if (!groups[date]) {
             groups[date] = [];
@@ -946,12 +994,19 @@ export default function Live_Alerts_India() {
           return groups;
         }, {});
         
-        const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
+        const archivedArray = Object.entries(groupedArchived)
           .map(([date, alerts]) => ({ date, alerts }))
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         
+        setArchivedAlerts(archivedArray);
+        
+        const watchlistOnlyAlerts = sortedAlerts.filter(alert => 
+          watchlistSymbols.includes(alert.stock)
+        );
+        
+        const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
+        
         setAlertsData(latestAlerts);
-        setArchivedAlerts(archivedAlertsArray);
         setIsLoading(false);
         
       } catch (error) {
@@ -974,7 +1029,7 @@ export default function Live_Alerts_India() {
     }
   };
 
-  // Handle adding new strategies
+  // Handle adding new strategies - UPDATED with archive fetch
   const handleAddStrategies = async () => {
     if (selectedNewStrategies.length === 0) {
       alert("Please select at least one strategy to add");
@@ -1034,9 +1089,31 @@ export default function Live_Alerts_India() {
       // Get current watchlist
       const watchlistSymbols = watchlist.map(item => item.base_symbol);
       
+      // Fetch archive alerts
+      const archivedAlertsData = await fetchArchivedAlerts();
+      
+      const watchlistArchived = archivedAlertsData.filter(alert => 
+        watchlistSymbols.includes(alert.stock)
+      );
+      
+      const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
+        const date = alert.date;
+        if (!groups[date]) {
+          groups[date] = [];
+        }
+        groups[date].push(alert);
+        return groups;
+      }, {});
+      
+      const archivedArray = Object.entries(groupedArchived)
+        .map(([date, alerts]) => ({ date, alerts }))
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      setArchivedAlerts(archivedArray);
+      
+      // Handle live alerts
       let allAlerts: any[] = [];
       
-      // Add non-momentum alerts
       const nonMomentumStrategies = mergedStrategies.filter(s => 
         s !== "Momentum Riders (52-week High/Low, All-Time High/Low)"
       );
@@ -1046,40 +1123,21 @@ export default function Live_Alerts_India() {
         allAlerts = [...allAlerts, ...strategyAlerts];
       });
       
-      // Add momentum alerts if selected
       if (isMomentumSelected) {
         allAlerts = [...allAlerts, ...momentumAlertsData];
       }
       
-      // Filter to ONLY watchlist stocks
       const watchlistOnlyAlerts = allAlerts.filter(alert => 
         watchlistSymbols.includes(alert.stock)
       );
       
-      // Sort by timestamp
       const sortedAlerts = watchlistOnlyAlerts.sort((a, b) => 
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       );
       
-      // Take latest 10 for center
       const latestAlerts = sortedAlerts.slice(0, 10);
-      const remainingAlerts = sortedAlerts.slice(10);
-      
-      const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-        const date = alert.date;
-        if (!groups[date]) {
-          groups[date] = [];
-        }
-        groups[date].push(alert);
-        return groups;
-      }, {});
-      
-      const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-        .map(([date, alerts]) => ({ date, alerts }))
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       
       setAlertsData(latestAlerts);
-      setArchivedAlerts(archivedAlertsArray);
       
       alert(`${selectedNewStrategies.length} strategy(ies) added successfully!`);
       setSelectedNewStrategies([]);
@@ -1092,7 +1150,7 @@ export default function Live_Alerts_India() {
     }
   };
 
-  // Handle remove strategy
+  // Handle remove strategy - UPDATED with archive fetch
   const handleRemoveStrategy = async (strategyToRemove: string) => {
     console.log("=== REMOVE INDIA STRATEGY ===");
     
@@ -1126,6 +1184,29 @@ export default function Live_Alerts_India() {
       // Get current watchlist
       const watchlistSymbols = watchlist.map(item => item.base_symbol);
       
+      // Fetch archive alerts
+      const archivedAlertsData = await fetchArchivedAlerts();
+      
+      const watchlistArchived = archivedAlertsData.filter(alert => 
+        watchlistSymbols.includes(alert.stock)
+      );
+      
+      const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
+        const date = alert.date;
+        if (!groups[date]) {
+          groups[date] = [];
+        }
+        groups[date].push(alert);
+        return groups;
+      }, {});
+      
+      const archivedArray = Object.entries(groupedArchived)
+        .map(([date, alerts]) => ({ date, alerts }))
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      setArchivedAlerts(archivedArray);
+      
+      // Handle live alerts
       const isMomentumSelected = updatedStrategies.includes("Momentum Riders (52-week High/Low, All-Time High/Low)");
       
       let allAlerts: any[] = [];
@@ -1144,35 +1225,17 @@ export default function Live_Alerts_India() {
         allAlerts = [...allAlerts, ...strategyAlerts];
       });
       
-      // Filter to ONLY watchlist stocks
       const watchlistOnlyAlerts = allAlerts.filter(alert => 
         watchlistSymbols.includes(alert.stock)
       );
       
-      // Sort by timestamp
       const sortedAlerts = watchlistOnlyAlerts.sort((a, b) => 
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       );
       
-      // Take latest 10 for center
       const latestAlerts = sortedAlerts.slice(0, 10);
-      const remainingAlerts = sortedAlerts.slice(10);
-      
-      const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-        const date = alert.date;
-        if (!groups[date]) {
-          groups[date] = [];
-        }
-        groups[date].push(alert);
-        return groups;
-      }, {});
-      
-      const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-        .map(([date, alerts]) => ({ date, alerts }))
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       
       setAlertsData(latestAlerts);
-      setArchivedAlerts(archivedAlertsArray);
       
       window.dispatchEvent(new Event('storage'));
       alert(`✓ "${strategyToRemove}" alerts have been removed!`);
@@ -1226,7 +1289,7 @@ export default function Live_Alerts_India() {
     setShowArchivedDetails(true);
   };
 
-  // Refresh function
+  // Refresh function - UPDATED with archive fetch
   const handleRefresh = async () => {
     try {
       await refreshWatchlistFromBackend();
@@ -1248,6 +1311,29 @@ export default function Live_Alerts_India() {
           
           const watchlistSymbols = watchlist.map(item => item.base_symbol);
           
+          // Fetch archive alerts
+          const archivedAlertsData = await fetchArchivedAlerts();
+          
+          const watchlistArchived = archivedAlertsData.filter(alert => 
+            watchlistSymbols.includes(alert.stock)
+          );
+          
+          const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
+            const date = alert.date;
+            if (!groups[date]) {
+              groups[date] = [];
+            }
+            groups[date].push(alert);
+            return groups;
+          }, {});
+          
+          const archivedArray = Object.entries(groupedArchived)
+            .map(([date, alerts]) => ({ date, alerts }))
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          
+          setArchivedAlerts(archivedArray);
+          
+          // Handle live alerts
           if (indiaStrategies.includes("Momentum Riders (52-week High/Low, All-Time High/Low)")) {
             console.log("Refreshing Momentum alerts...");
             const momentumAlertsData = await fetchMomentumAlerts();
@@ -1261,24 +1347,8 @@ export default function Live_Alerts_India() {
             );
             
             const latestAlerts = sortedAlerts.slice(0, 10);
-            const remainingAlerts = sortedAlerts.slice(10);
-            
-            const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-              const date = alert.date;
-              if (!groups[date]) {
-                groups[date] = [];
-              }
-              groups[date].push(alert);
-              return groups;
-            }, {});
-            
-            const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-              .map(([date, alerts]) => ({ date, alerts }))
-              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             
             setAlertsData(latestAlerts);
-            setArchivedAlerts(archivedAlertsArray);
-            alert(`Refreshed! Found ${watchlistOnlyAlerts.length} alerts for your watchlist, showing latest 10`);
           } else {
             const filteredAlerts = hardcodedAlerts.filter(alert => 
               indiaStrategies.includes(alert.type)
@@ -1293,26 +1363,11 @@ export default function Live_Alerts_India() {
             );
             
             const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
-            const remainingAlerts = watchlistOnlyAlerts.slice(10);
-            
-            const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-              const date = alert.date;
-              if (!groups[date]) {
-                groups[date] = [];
-              }
-              groups[date].push(alert);
-              return groups;
-            }, {});
-            
-            const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-              .map(([date, alerts]) => ({ date, alerts }))
-              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             
             setAlertsData(latestAlerts);
-            setArchivedAlerts(archivedAlertsArray);
-            alert(`Refreshed! Found ${watchlistOnlyAlerts.length} alerts for your watchlist, showing latest 10`);
           }
           
+          alert(`Refreshed! Found ${watchlistArchived.length} archived alerts for your watchlist`);
           return;
         }
       }
@@ -1325,6 +1380,29 @@ export default function Live_Alerts_India() {
         
         const watchlistSymbols = watchlist.map(item => item.base_symbol);
         
+        // Fetch archive alerts
+        const archivedAlertsData = await fetchArchivedAlerts();
+        
+        const watchlistArchived = archivedAlertsData.filter(alert => 
+          watchlistSymbols.includes(alert.stock)
+        );
+        
+        const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
+          const date = alert.date;
+          if (!groups[date]) {
+            groups[date] = [];
+          }
+          groups[date].push(alert);
+          return groups;
+        }, {});
+        
+        const archivedArray = Object.entries(groupedArchived)
+          .map(([date, alerts]) => ({ date, alerts }))
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        setArchivedAlerts(archivedArray);
+        
+        // Handle live alerts
         if (parsed.includes("Momentum Riders (52-week High/Low, All-Time High/Low)")) {
           console.log("Refreshing Momentum alerts from localStorage...");
           const momentumAlertsData = await fetchMomentumAlerts();
@@ -1338,24 +1416,8 @@ export default function Live_Alerts_India() {
           );
           
           const latestAlerts = sortedAlerts.slice(0, 10);
-          const remainingAlerts = sortedAlerts.slice(10);
-          
-          const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-            const date = alert.date;
-            if (!groups[date]) {
-              groups[date] = [];
-            }
-            groups[date].push(alert);
-            return groups;
-          }, {});
-          
-          const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-            .map(([date, alerts]) => ({ date, alerts }))
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
           
           setAlertsData(latestAlerts);
-          setArchivedAlerts(archivedAlertsArray);
-          alert(`Refreshed! Found ${watchlistOnlyAlerts.length} alerts for your watchlist, showing latest 10`);
         } else {
           const filteredAlerts = hardcodedAlerts.filter(alert => 
             parsed.includes(alert.type)
@@ -1370,25 +1432,11 @@ export default function Live_Alerts_India() {
           );
           
           const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
-          const remainingAlerts = watchlistOnlyAlerts.slice(10);
-          
-          const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-            const date = alert.date;
-            if (!groups[date]) {
-              groups[date] = [];
-            }
-            groups[date].push(alert);
-            return groups;
-          }, {});
-          
-          const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-            .map(([date, alerts]) => ({ date, alerts }))
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
           
           setAlertsData(latestAlerts);
-          setArchivedAlerts(archivedAlertsArray);
-          alert(`Refreshed! Found ${watchlistOnlyAlerts.length} alerts for your watchlist, showing latest 10`);
         }
+        
+        alert(`Refreshed! Found ${watchlistArchived.length} archived alerts for your watchlist`);
       } else {
         alert("No India preferences found");
       }
@@ -1558,11 +1606,11 @@ export default function Live_Alerts_India() {
           </div>
         </section>
 
-        {/* MAIN CONTENT - EXACT SAME LAYOUT AS US PAGE */}
+        {/* MAIN CONTENT */}
         <div className="grid grid-cols-12 gap-6">
           {/* LEFT SIDEBAR */}
           <aside className="col-span-12 md:col-span-3 space-y-6">
-            {/* ALERT TYPES SECTION - EXACT SAME AS US */}
+            {/* ALERT TYPES SECTION */}
             <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 border border-slate-700 rounded-2xl p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-lg">Active Alert Types</h3>
@@ -1623,7 +1671,7 @@ export default function Live_Alerts_India() {
               )}
             </div>
 
-            {/* ADD STRATEGIES SECTION - EXACT SAME AS US (only color changed) */}
+            {/* ADD STRATEGIES SECTION */}
             <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 border border-slate-700 rounded-2xl p-5 space-y-4">
               {!showAddStrategies ? (
                 <>
@@ -1722,7 +1770,7 @@ export default function Live_Alerts_India() {
               )}
             </div>
 
-            {/* ARCHIVED ALERTS - WITH SEARCH - EXACT SAME AS US */}
+            {/* ARCHIVED ALERTS - WITH SEARCH */}
             <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 border border-slate-700 rounded-2xl p-5">
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-4">
@@ -1748,7 +1796,7 @@ export default function Live_Alerts_India() {
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                       type="text"
-                      placeholder="Search"
+                      placeholder="Search Company / Symbol..."
                       value={archiveSearchQuery}
                       onChange={(e) => setArchiveSearchQuery(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-10 pr-8 py-2 focus:border-cyan-500 focus:outline-none text-sm"
@@ -1814,7 +1862,7 @@ export default function Live_Alerts_India() {
             </div>
           </aside>
 
-          {/* CENTER ALERTS - SHOW ONLY LATEST 10 ALERTS (NO "NO ACTIVITY" CARDS) - EXACT SAME AS US */}
+          {/* CENTER ALERTS - SHOW ONLY LATEST 10 ALERTS */}
           <section className="col-span-12 md:col-span-6 space-y-6">
             <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 border border-slate-700 rounded-2xl p-6">
               <div className="flex items-center justify-between mb-6">
@@ -1837,7 +1885,7 @@ export default function Live_Alerts_India() {
                   <div className="w-16 h-16 mx-auto mb-4 bg-slate-800/50 rounded-full flex items-center justify-center">
                     <Star className="w-8 h-8 text-slate-500" />
                   </div>
-                  <p className="text-slate-400 mb-2">No stocks in watchlist</p>
+                  <p className="text-slate-400 mb-2">No alerts for your watchlist</p>
                   <p className="text-sm text-slate-500">
                     Create watchlist to get personalised alerts
                   </p>
@@ -1848,10 +1896,6 @@ export default function Live_Alerts_India() {
                     <Target className="w-8 h-8 text-slate-500" />
                   </div>
                   <p className="text-slate-400 mb-2">No alerts for your watchlist</p>
-                  <p className="text-sm text-slate-500">
-                    Create watchlist to get personalised alerts
-                  </p>
-                  
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -1956,24 +2000,31 @@ export default function Live_Alerts_India() {
             </div>
           </section>
 
-          {/* RIGHT SIDEBAR - EXACT SAME AS US */}
+          {/* RIGHT SIDEBAR */}
           <aside className="col-span-12 md:col-span-3 space-y-6">
-            {/* WATCHLIST SECTION - FIXED: Restored content */}
+            {/* WATCHLIST SECTION */}
             <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 border border-slate-700 rounded-2xl p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-lg">Your Watchlist</h3>
                 <span className="text-xs text-slate-500">{watchlist.length}/20</span>
               </div>
               
+              {/* Search Bar for Watchlist - opens modal */}
               <div className="mb-4">
-                <div className="relative">
+                <div className="relative cursor-pointer" onClick={() => setShowStockList(true)}>
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type="text"
-                    placeholder="Search"
+                    placeholder="Search Company / Symbol..."
                     value={searchAlertQuery}
-                    onChange={(e) => setSearchAlertQuery(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-10 pr-3 py-2 focus:border-cyan-500 focus:outline-none"
+                    onChange={(e) => {
+                      setSearchAlertQuery(e.target.value);
+                      if (e.target.value.length >= 2) {
+                        setShowStockList(true);
+                        setSearchQuery(e.target.value);
+                      }
+                    }}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-10 pr-3 py-2 focus:border-cyan-500 focus:outline-none cursor-pointer"
                   />
                 </div>
               </div>
@@ -1985,7 +2036,7 @@ export default function Live_Alerts_India() {
                 <Plus className="w-4 h-4 mr-2" /> Add Stocks
               </Button>
 
-              {/* Watchlist Items - FIXED: Restored content */}
+              {/* Watchlist Items */}
               <div 
                 className="space-y-2 overflow-y-auto pr-1" 
                 style={{ 
@@ -2015,8 +2066,8 @@ export default function Live_Alerts_India() {
                         >
                           <div className="flex-1 min-w-0">
                             
+                            
                           </div>
-                          
                         </div>
                       );
                     })
@@ -2032,7 +2083,7 @@ export default function Live_Alerts_India() {
               )}
             </div>
 
-            {/* TELEGRAM & SUBSCRIBE SECTION - EXACT SAME AS US WITH INDIA BOT */}
+            {/* TELEGRAM & SUBSCRIBE SECTION */}
             <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 border border-slate-700 rounded-2xl p-5">
               <div className="text-center mb-6">
                 <div className="w-16 h-16 mx-auto mb-3 bg-gradient-to-br from-green-500/20 to-teal-500/20 rounded-full flex items-center justify-center">
@@ -2057,39 +2108,36 @@ export default function Live_Alerts_India() {
                 </Button>
                 
                 <Button
-      onClick={async () => {
-        try {
-          // First open Telegram bot
-          window.open("https://t.me/AIFinverseWatchlistBot?start=start", "_blank");
-          
-          // Get user ID from localStorage
-          const userProfile = localStorage.getItem("userProfile");
-          const userId = userProfile ? JSON.parse(userProfile).userId : null;
-          
-          if (!userId) {
-            console.error("No user ID found");
-            return;
-          }
+                  onClick={async () => {
+                    try {
+                      window.open("https://t.me/AIFinverseWatchlistBot?start=start", "_blank");
+                      
+                      const userProfile = localStorage.getItem("userProfile");
+                      const userId = userProfile ? JSON.parse(userProfile).userId : null;
+                      
+                      if (!userId) {
+                        console.error("No user ID found");
+                        return;
+                      }
 
-          // Call the webhook API with the user ID in the request body
-          const response = await fetch('https://api.aifinverse.com/telegram/webhook/watchlist', {
-            method: 'POST',
-            headers: {
-              'accept': 'application/json',
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ id: userId })
-          });
+                      const response = await fetch('https://api.aifinverse.com/telegram/webhook/watchlist', {
+                        method: 'POST',
+                        headers: {
+                          'accept': 'application/json',
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ id: userId })
+                      });
 
-          if (response.ok) {
-            console.log("✅ Watchlist alert subscription registered");
-          } else {
-            console.error("Failed to register watchlist subscription");
-          }
-        } catch (error) {
-          console.error("Error calling watchlist webhook:", error);
-        }
-      }}
+                      if (response.ok) {
+                        console.log("✅ Watchlist alert subscription registered");
+                      } else {
+                        console.error("Failed to register watchlist subscription");
+                      }
+                    } catch (error) {
+                      console.error("Error calling watchlist webhook:", error);
+                    }
+                  }}
                   className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 py-3 text-m text-black font-bold flex items-center justify-center"
                 >
                   <div className="flex items-center gap-2">
@@ -2105,7 +2153,7 @@ export default function Live_Alerts_India() {
         </div>
       </main>
 
-      {/* STOCK SELECTION MODAL - EXACT SAME AS US */}
+      {/* STOCK SELECTION MODAL */}
       {showStockList && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 w-full max-w-2xl max-h-[80vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col">
@@ -2221,7 +2269,7 @@ export default function Live_Alerts_India() {
         </div>
       )}
 
-      {/* ARCHIVED ALERT DETAILS MODAL - EXACT SAME STYLE AS CENTER ALERT EXPANDED VIEW */}
+      {/* ARCHIVED ALERT DETAILS MODAL */}
       {showArchivedDetails && selectedArchivedAlert && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md overflow-y-auto">
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 w-full max-w-4xl max-h-[90vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col">
@@ -2352,7 +2400,7 @@ export default function Live_Alerts_India() {
         />
       </button>
 
-      {/* CHAT BOX - EXACT SAME AS US */}
+      {/* CHAT BOX */}
       {chatOpen && (
         <div className="fixed bottom-24 right-6 w-80 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 shadow-2xl z-50 border border-cyan-500/20">
           <div className="flex items-center justify-between mb-4">
@@ -2405,7 +2453,7 @@ export default function Live_Alerts_India() {
         </div>
       )}
 
-      {/* FOOTER - EXACT SAME AS US */}
+      {/* FOOTER */}
       <footer className="mt-20 py-4 bg-slate-1000/50 text-center text-sm text-slate-500">
         <div className="max-w-7xl mx-auto px-2 py-1 text-center">
           <div className="mb-4">

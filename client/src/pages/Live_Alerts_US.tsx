@@ -215,7 +215,30 @@ export default function Live_Alerts_US() {
       alert(`Successfully added ${newStocksToAdd.length} stock(s) to US watchlist!`);
       
       // Refresh watchlist from backend
-      refreshWatchlistFromBackend();
+      await refreshWatchlistFromBackend();
+      
+      // AFTER adding stocks, refresh archive alerts with the new watchlist
+      const watchlistSymbols = [...watchlist, ...addedStocks].map(item => item.base_symbol);
+      const archivedAlertsData = await fetchArchivedAlerts();
+      
+      const watchlistArchived = archivedAlertsData.filter(alert => 
+        watchlistSymbols.includes(alert.stock)
+      );
+      
+      const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
+        const date = alert.date;
+        if (!groups[date]) {
+          groups[date] = [];
+        }
+        groups[date].push(alert);
+        return groups;
+      }, {});
+      
+      const archivedArray = Object.entries(groupedArchived)
+        .map(([date, alerts]) => ({ date, alerts }))
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      setArchivedAlerts(archivedArray);
       
     } catch (error: any) {
       console.error("Add stocks error:", error);
@@ -236,6 +259,29 @@ export default function Live_Alerts_US() {
         if (userData.watchlist && userData.watchlist.US) {
           setWatchlist(userData.watchlist.US);
           console.log("✅ US Watchlist refreshed from backend:", userData.watchlist.US.length, "items");
+          
+          // Also refresh archive alerts with new watchlist
+          const watchlistSymbols = userData.watchlist.US.map((item: WatchlistItem) => item.base_symbol);
+          const archivedAlertsData = await fetchArchivedAlerts();
+          
+          const watchlistArchived = archivedAlertsData.filter(alert => 
+            watchlistSymbols.includes(alert.stock)
+          );
+          
+          const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
+            const date = alert.date;
+            if (!groups[date]) {
+              groups[date] = [];
+            }
+            groups[date].push(alert);
+            return groups;
+          }, {});
+          
+          const archivedArray = Object.entries(groupedArchived)
+            .map(([date, alerts]) => ({ date, alerts }))
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          
+          setArchivedAlerts(archivedArray);
         }
       }
     } catch (error) {
@@ -498,7 +544,7 @@ export default function Live_Alerts_US() {
           news: alert.news_link || alert.news || `https://www.cnbc.com/quotes/${alert.symbol}`,
           chart: alert.tradingview_link || alert.chart || `https://www.tradingview.com/chart/?symbol=${alert.symbol}`,
           time: alert.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          strategy: "Momentum Riders",
+          strategy: "Momentum Riders (52-week High/Low, All-Time High/Low)",
           date: alert.date || new Date().toISOString().split('T')[0],
           timestamp: alert.timestamp || new Date().toISOString(),
           description: alert.description || `${alert.symbol} triggered a 52-week high momentum alert with RSI ${alert.rsi?.toFixed(2) || 'N/A'}.`,
@@ -511,6 +557,53 @@ export default function Live_Alerts_US() {
     }
     return [];
   };
+
+  // Function to fetch archived alerts from history API
+const fetchArchivedAlerts = async () => {
+  try {
+    const response = await api.get("/alerts/history/us");
+    console.log("✅ Archived alerts API called successfully", response.data);
+    
+    // Handle different possible response structures
+    let alertsArray = [];
+    
+    if (response.data && Array.isArray(response.data)) {
+      // If response is directly an array
+      alertsArray = response.data;
+    } else if (response.data && Array.isArray(response.data.alerts)) {
+      // If response has alerts property
+      alertsArray = response.data.alerts;
+    } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+      // If response has data property
+      alertsArray = response.data.data;
+    }
+    
+    if (alertsArray.length > 0) {
+      return alertsArray.map((alert: any) => ({
+        stock: alert.symbol || alert.stock || 'N/A',
+        type: alert.type || alert.strategy || "Momentum Riders (52-week High/Low, All-Time High/Low)",
+        price: alert.price ? `$${typeof alert.price === 'number' ? alert.price.toFixed(2) : alert.price}` : "N/A",
+        change: alert.pct_change !== undefined 
+          ? `${alert.pct_change > 0 ? '+' : ''}${typeof alert.pct_change === 'number' ? alert.pct_change.toFixed(2) : alert.pct_change}%` 
+          : alert.change || "0%",
+        rsi: alert.rsi ? (typeof alert.rsi === 'number' ? alert.rsi.toFixed(2) : alert.rsi) : "50",
+        rsiStatus: getRsiStatusFromValue(alert.rsi || 50),
+        news: alert.news_link || alert.news || `https://www.cnbc.com/quotes/${alert.symbol || ''}`,
+        chart: alert.tradingview_link || alert.chart || `https://www.tradingview.com/chart/?symbol=${alert.symbol || ''}`,
+        time: alert.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        strategy: alert.strategy || alert.type || "Momentum Riders (52-week High/Low, All-Time High/Low)",
+        date: alert.date || new Date().toISOString().split('T')[0],
+        timestamp: alert.timestamp || alert.created_at || new Date().toISOString(),
+        description: alert.description || `${alert.symbol || 'Stock'} triggered an alert.`,
+        marketCap: alert.marketCap || "N/A",
+        trigger: alert.trigger || "ALERT"
+      }));
+    }
+  } catch (error) {
+    console.error("Error calling archived alerts API:", error);
+  }
+  return [];
+};
 
   // Filter archive groups based on watchlist stocks AND search query
   useEffect(() => {
@@ -543,7 +636,7 @@ export default function Live_Alerts_US() {
     }
   }, [archiveSearchQuery, archivedAlerts, watchlist]);
 
-  // MAIN LOAD FUNCTION - CRITICAL FIX: Load watchlist FIRST
+  // MAIN LOAD FUNCTION - Load watchlist and alerts
   useEffect(() => {
     const loadUserPreferences = async () => {
       try {
@@ -569,7 +662,7 @@ export default function Live_Alerts_US() {
         
         const userId = profile.userId || profile.user_id || localStorage.getItem("userId");
         
-        // CRITICAL FIX: FIRST load watchlist
+        // Load watchlist first
         let userWatchlist: WatchlistItem[] = [];
         if (userId) {
           try {
@@ -618,7 +711,7 @@ export default function Live_Alerts_US() {
                 localStorage.setItem("alertPreferencesUS", JSON.stringify(usStrategies));
                 setSelectedAlertTypes(usStrategies);
                 
-                // Get watchlist symbols (use the one we already loaded)
+                // Get watchlist symbols
                 const watchlistSymbols = userWatchlist.map(item => item.base_symbol);
                 
                 // If no watchlist stocks, show empty
@@ -629,85 +722,64 @@ export default function Live_Alerts_US() {
                   return;
                 }
                 
-                // CHECK: If Momentum strategy is selected, fetch live alerts
+                // Fetch archive alerts FIRST (independent of strategies)
+                const archivedAlertsData = await fetchArchivedAlerts();
+                console.log("📦 Raw archived alerts data:", archivedAlertsData);
+                console.log("📊 Watchlist symbols:", watchlistSymbols);
+                
+                // Filter archived alerts to watchlist stocks and group by date
+                const watchlistArchived = archivedAlertsData.filter(alert => 
+                  watchlistSymbols.includes(alert.stock)
+                );
+                console.log("🔍 Filtered watchlist archived alerts:", watchlistArchived);
+                
+                const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
+                  const date = alert.date;
+                  if (!groups[date]) {
+                    groups[date] = [];
+                  }
+                  groups[date].push(alert);
+                  return groups;
+                }, {});
+                
+                const archivedArray = Object.entries(groupedArchived)
+                  .map(([date, alerts]) => ({ date, alerts }))
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                
+                setArchivedAlerts(archivedArray);
+                
+                // Now handle live alerts for center section (original logic)
                 if (usStrategies.includes("Momentum Riders (52-week High/Low, All-Time High/Low)")) {
                   console.log("Momentum strategy is active, fetching live alerts...");
                   const momentumAlertsData = await fetchMomentumAlerts();
                   
-                  // Filter to ONLY watchlist stocks
                   const watchlistOnlyAlerts = momentumAlertsData.filter(alert => 
                     watchlistSymbols.includes(alert.stock)
                   );
                   
-                  // Sort by timestamp (newest first)
                   const sortedAlerts = watchlistOnlyAlerts.sort((a, b) => 
                     new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
                   );
                   
-                  // Take ONLY the latest 10 alerts for center section
                   const latestAlerts = sortedAlerts.slice(0, 10);
                   
-                  // ALL remaining alerts go to archive
-                  const remainingAlerts = sortedAlerts.slice(10);
-                  
-                  console.log(`Center: ${latestAlerts.length}, Archive: ${remainingAlerts.length}`);
-                  
-                  // Group remaining alerts by date
-                  const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-                    const date = alert.date;
-                    if (!groups[date]) {
-                      groups[date] = [];
-                    }
-                    groups[date].push(alert);
-                    return groups;
-                  }, {});
-                  
-                  const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-                    .map(([date, alerts]) => ({ date, alerts }))
-                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                  
                   setAlertsData(latestAlerts);
-                  setArchivedAlerts(archivedAlertsArray);
                 } else {
-                  // If Momentum is not selected, only show hardcoded alerts
                   const filteredAlerts = hardcodedAlerts.filter(alert => 
                     usStrategies.includes(alert.type)
                   );
                   
-                  // Sort by timestamp
                   const sortedAlerts = filteredAlerts.sort((a, b) => 
                     new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
                   );
                   
-                  // Filter to ONLY watchlist stocks
                   const watchlistOnlyAlerts = sortedAlerts.filter(alert => 
                     watchlistSymbols.includes(alert.stock)
                   );
                   
-                  // Take ONLY the latest 10 alerts for center section
                   const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
                   
-                  // ALL remaining alerts go to archive
-                  const remainingAlerts = watchlistOnlyAlerts.slice(10);
-                  
-                  console.log(`Center: ${latestAlerts.length}, Archive: ${remainingAlerts.length}`);
-                  
-                  // Group remaining alerts by date
-                  const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-                    const date = alert.date;
-                    if (!groups[date]) {
-                      groups[date] = [];
-                    }
-                    groups[date].push(alert);
-                    return groups;
-                  }, {});
-                  
-                  const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-                    .map(([date, alerts]) => ({ date, alerts }))
-                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                  
                   setAlertsData(latestAlerts);
-                  setArchivedAlerts(archivedAlertsArray);
                 }
                 
                 setIsLoading(false);
@@ -719,7 +791,7 @@ export default function Live_Alerts_US() {
           }
         }
         
-        // 5. Fallback to localStorage
+        // Fallback to localStorage (keep original logic, just add archive)
         const savedUSPrefs = localStorage.getItem("alertPreferencesUS");
         
         if (savedUSPrefs) {
@@ -729,10 +801,8 @@ export default function Live_Alerts_US() {
               usStrategies = parsed;
               setSelectedAlertTypes(parsed);
               
-              // Get watchlist symbols
               const watchlistSymbols = userWatchlist.map(item => item.base_symbol);
               
-              // If no watchlist stocks, show empty
               if (watchlistSymbols.length === 0) {
                 setAlertsData([]);
                 setArchivedAlerts([]);
@@ -740,83 +810,60 @@ export default function Live_Alerts_US() {
                 return;
               }
               
-              // CHECK: If Momentum strategy is selected, fetch live alerts
+              // Fetch archive alerts
+              const archivedAlertsData = await fetchArchivedAlerts();
+              
+              const watchlistArchived = archivedAlertsData.filter(alert => 
+                watchlistSymbols.includes(alert.stock)
+              );
+              
+              const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
+                const date = alert.date;
+                if (!groups[date]) {
+                  groups[date] = [];
+                }
+                groups[date].push(alert);
+                return groups;
+              }, {});
+              
+              const archivedArray = Object.entries(groupedArchived)
+                .map(([date, alerts]) => ({ date, alerts }))
+                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              
+              setArchivedAlerts(archivedArray);
+              
+              // Handle live alerts
               if (parsed.includes("Momentum Riders (52-week High/Low, All-Time High/Low)")) {
                 console.log("Momentum strategy is active in localStorage, fetching live alerts...");
                 const momentumAlertsData = await fetchMomentumAlerts();
                 
-                // Filter to ONLY watchlist stocks
                 const watchlistOnlyAlerts = momentumAlertsData.filter(alert => 
                   watchlistSymbols.includes(alert.stock)
                 );
                 
-                // Sort by timestamp
                 const sortedAlerts = watchlistOnlyAlerts.sort((a, b) => 
                   new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
                 );
                 
-                // Take ONLY the latest 10 alerts for center section
                 const latestAlerts = sortedAlerts.slice(0, 10);
                 
-                // ALL remaining alerts go to archive
-                const remainingAlerts = sortedAlerts.slice(10);
-                
-                console.log(`Center: ${latestAlerts.length}, Archive: ${remainingAlerts.length}`);
-                
-                const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-                  const date = alert.date;
-                  if (!groups[date]) {
-                    groups[date] = [];
-                  }
-                  groups[date].push(alert);
-                  return groups;
-                }, {});
-                
-                const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-                  .map(([date, alerts]) => ({ date, alerts }))
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                
                 setAlertsData(latestAlerts);
-                setArchivedAlerts(archivedAlertsArray);
               } else {
-                // If Momentum is not selected, only show hardcoded alerts
                 const filteredAlerts = hardcodedAlerts.filter(alert => 
                   parsed.includes(alert.type)
                 );
                 
-                // Sort by timestamp
                 const sortedAlerts = filteredAlerts.sort((a, b) => 
                   new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
                 );
                 
-                // Filter to ONLY watchlist stocks
                 const watchlistOnlyAlerts = sortedAlerts.filter(alert => 
                   watchlistSymbols.includes(alert.stock)
                 );
                 
-                // Take ONLY the latest 10 alerts for center section
                 const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
                 
-                // ALL remaining alerts go to archive
-                const remainingAlerts = watchlistOnlyAlerts.slice(10);
-                
-                console.log(`Center: ${latestAlerts.length}, Archive: ${remainingAlerts.length}`);
-                
-                const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-                  const date = alert.date;
-                  if (!groups[date]) {
-                    groups[date] = [];
-                  }
-                  groups[date].push(alert);
-                  return groups;
-                }, {});
-                
-                const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-                  .map(([date, alerts]) => ({ date, alerts }))
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                
                 setAlertsData(latestAlerts);
-                setArchivedAlerts(archivedAlertsArray);
               }
               
               setIsLoading(false);
@@ -827,7 +874,7 @@ export default function Live_Alerts_US() {
           }
         }
         
-        // 6. If fresh registration
+        // Fresh registration
         const isFreshRegistration = localStorage.getItem("freshRegistration") === "true";
         
         if (isFreshRegistration && savedMarket === "US") {
@@ -855,10 +902,8 @@ export default function Live_Alerts_US() {
               localStorage.setItem("alertPreferencesUS", JSON.stringify(registrationStrategies));
               setSelectedAlertTypes(registrationStrategies);
               
-              // Get watchlist symbols
               const watchlistSymbols = userWatchlist.map(item => item.base_symbol);
               
-              // If no watchlist stocks, show empty
               if (watchlistSymbols.length === 0) {
                 setAlertsData([]);
                 setArchivedAlerts([]);
@@ -866,6 +911,29 @@ export default function Live_Alerts_US() {
                 return;
               }
               
+              // Fetch archive alerts
+              const archivedAlertsData = await fetchArchivedAlerts();
+              
+              const watchlistArchived = archivedAlertsData.filter(alert => 
+                watchlistSymbols.includes(alert.stock)
+              );
+              
+              const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
+                const date = alert.date;
+                if (!groups[date]) {
+                  groups[date] = [];
+                }
+                groups[date].push(alert);
+                return groups;
+              }, {});
+              
+              const archivedArray = Object.entries(groupedArchived)
+                .map(([date, alerts]) => ({ date, alerts }))
+                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              
+              setArchivedAlerts(archivedArray);
+              
+              // Handle live alerts
               if (registrationStrategies.includes("Momentum Riders (52-week High/Low, All-Time High/Low)")) {
                 console.log("Momentum strategy selected in fresh registration, fetching live alerts...");
                 const momentumAlertsData = await fetchMomentumAlerts();
@@ -879,23 +947,8 @@ export default function Live_Alerts_US() {
                 );
                 
                 const latestAlerts = sortedAlerts.slice(0, 10);
-                const remainingAlerts = sortedAlerts.slice(10);
-                
-                const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-                  const date = alert.date;
-                  if (!groups[date]) {
-                    groups[date] = [];
-                  }
-                  groups[date].push(alert);
-                  return groups;
-                }, {});
-                
-                const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-                  .map(([date, alerts]) => ({ date, alerts }))
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                 
                 setAlertsData(latestAlerts);
-                setArchivedAlerts(archivedAlertsArray);
               } else {
                 const filteredAlerts = hardcodedAlerts.filter(alert => 
                   registrationStrategies.includes(alert.type)
@@ -910,23 +963,8 @@ export default function Live_Alerts_US() {
                 );
                 
                 const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
-                const remainingAlerts = watchlistOnlyAlerts.slice(10);
-                
-                const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-                  const date = alert.date;
-                  if (!groups[date]) {
-                    groups[date] = [];
-                  }
-                  groups[date].push(alert);
-                  return groups;
-                }, {});
-                
-                const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-                  .map(([date, alerts]) => ({ date, alerts }))
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                 
                 setAlertsData(latestAlerts);
-                setArchivedAlerts(archivedAlertsArray);
               }
               
               localStorage.removeItem("freshRegistration");
@@ -938,15 +976,13 @@ export default function Live_Alerts_US() {
           }
         }
         
-        // Default fallback - use hardcoded alerts
+        // Default fallback
         const sortedAlerts = hardcodedAlerts.sort((a, b) => 
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         );
         
-        // Get watchlist symbols
         const watchlistSymbols = userWatchlist.map(item => item.base_symbol);
         
-        // If no watchlist stocks, show empty
         if (watchlistSymbols.length === 0) {
           setAlertsData([]);
           setArchivedAlerts([]);
@@ -954,20 +990,14 @@ export default function Live_Alerts_US() {
           return;
         }
         
-        // Filter to ONLY watchlist stocks
-        const watchlistOnlyAlerts = sortedAlerts.filter(alert => 
+        // Fetch archive alerts
+        const archivedAlertsData = await fetchArchivedAlerts();
+        
+        const watchlistArchived = archivedAlertsData.filter(alert => 
           watchlistSymbols.includes(alert.stock)
         );
         
-        // Take ONLY the latest 10 alerts for center section
-        const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
-        
-        // ALL remaining alerts go to archive
-        const remainingAlerts = watchlistOnlyAlerts.slice(10);
-        
-        console.log(`Center: ${latestAlerts.length}, Archive: ${remainingAlerts.length}`);
-        
-        const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
+        const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
           const date = alert.date;
           if (!groups[date]) {
             groups[date] = [];
@@ -976,12 +1006,19 @@ export default function Live_Alerts_US() {
           return groups;
         }, {});
         
-        const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
+        const archivedArray = Object.entries(groupedArchived)
           .map(([date, alerts]) => ({ date, alerts }))
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         
+        setArchivedAlerts(archivedArray);
+        
+        const watchlistOnlyAlerts = sortedAlerts.filter(alert => 
+          watchlistSymbols.includes(alert.stock)
+        );
+        
+        const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
+        
         setAlertsData(latestAlerts);
-        setArchivedAlerts(archivedAlertsArray);
         setIsLoading(false);
         
       } catch (error) {
@@ -1004,7 +1041,7 @@ export default function Live_Alerts_US() {
     }
   };
 
-  // Handle adding new strategies
+  // Handle adding new strategies (keep original logic, add archive fetch)
   const handleAddStrategies = async () => {
     if (selectedNewStrategies.length === 0) {
       alert("Please select at least one strategy to add");
@@ -1064,9 +1101,31 @@ export default function Live_Alerts_US() {
       // Get current watchlist
       const watchlistSymbols = watchlist.map(item => item.base_symbol);
       
+      // Fetch archive alerts
+      const archivedAlertsData = await fetchArchivedAlerts();
+      
+      const watchlistArchived = archivedAlertsData.filter(alert => 
+        watchlistSymbols.includes(alert.stock)
+      );
+      
+      const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
+        const date = alert.date;
+        if (!groups[date]) {
+          groups[date] = [];
+        }
+        groups[date].push(alert);
+        return groups;
+      }, {});
+      
+      const archivedArray = Object.entries(groupedArchived)
+        .map(([date, alerts]) => ({ date, alerts }))
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      setArchivedAlerts(archivedArray);
+      
+      // Handle live alerts
       let allAlerts: any[] = [];
       
-      // Add non-momentum alerts
       const nonMomentumStrategies = mergedStrategies.filter(s => 
         s !== "Momentum Riders (52-week High/Low, All-Time High/Low)"
       );
@@ -1076,40 +1135,21 @@ export default function Live_Alerts_US() {
         allAlerts = [...allAlerts, ...strategyAlerts];
       });
       
-      // Add momentum alerts if selected
       if (isMomentumSelected) {
         allAlerts = [...allAlerts, ...momentumAlertsData];
       }
       
-      // Filter to ONLY watchlist stocks
       const watchlistOnlyAlerts = allAlerts.filter(alert => 
         watchlistSymbols.includes(alert.stock)
       );
       
-      // Sort by timestamp
       const sortedAlerts = watchlistOnlyAlerts.sort((a, b) => 
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       );
       
-      // Take latest 10 for center
       const latestAlerts = sortedAlerts.slice(0, 10);
-      const remainingAlerts = sortedAlerts.slice(10);
-      
-      const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-        const date = alert.date;
-        if (!groups[date]) {
-          groups[date] = [];
-        }
-        groups[date].push(alert);
-        return groups;
-      }, {});
-      
-      const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-        .map(([date, alerts]) => ({ date, alerts }))
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       
       setAlertsData(latestAlerts);
-      setArchivedAlerts(archivedAlertsArray);
       
       alert(`${selectedNewStrategies.length} strategy(ies) added successfully!`);
       setSelectedNewStrategies([]);
@@ -1122,7 +1162,7 @@ export default function Live_Alerts_US() {
     }
   };
 
-  // Handle remove strategy
+  // Handle remove strategy (keep original logic, add archive fetch)
   const handleRemoveStrategy = async (strategyToRemove: string) => {
     console.log("=== REMOVE US STRATEGY ===");
     
@@ -1156,6 +1196,29 @@ export default function Live_Alerts_US() {
       // Get current watchlist
       const watchlistSymbols = watchlist.map(item => item.base_symbol);
       
+      // Fetch archive alerts
+      const archivedAlertsData = await fetchArchivedAlerts();
+      
+      const watchlistArchived = archivedAlertsData.filter(alert => 
+        watchlistSymbols.includes(alert.stock)
+      );
+      
+      const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
+        const date = alert.date;
+        if (!groups[date]) {
+          groups[date] = [];
+        }
+        groups[date].push(alert);
+        return groups;
+      }, {});
+      
+      const archivedArray = Object.entries(groupedArchived)
+        .map(([date, alerts]) => ({ date, alerts }))
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      setArchivedAlerts(archivedArray);
+      
+      // Handle live alerts
       const isMomentumSelected = updatedStrategies.includes("Momentum Riders (52-week High/Low, All-Time High/Low)");
       
       let allAlerts: any[] = [];
@@ -1174,35 +1237,17 @@ export default function Live_Alerts_US() {
         allAlerts = [...allAlerts, ...strategyAlerts];
       });
       
-      // Filter to ONLY watchlist stocks
       const watchlistOnlyAlerts = allAlerts.filter(alert => 
         watchlistSymbols.includes(alert.stock)
       );
       
-      // Sort by timestamp
       const sortedAlerts = watchlistOnlyAlerts.sort((a, b) => 
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       );
       
-      // Take latest 10 for center
       const latestAlerts = sortedAlerts.slice(0, 10);
-      const remainingAlerts = sortedAlerts.slice(10);
-      
-      const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-        const date = alert.date;
-        if (!groups[date]) {
-          groups[date] = [];
-        }
-        groups[date].push(alert);
-        return groups;
-      }, {});
-      
-      const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-        .map(([date, alerts]) => ({ date, alerts }))
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       
       setAlertsData(latestAlerts);
-      setArchivedAlerts(archivedAlertsArray);
       
       window.dispatchEvent(new Event('storage'));
       alert(`✓ "${strategyToRemove}" alerts have been removed!`);
@@ -1256,7 +1301,7 @@ export default function Live_Alerts_US() {
     setShowArchivedDetails(true);
   };
 
-  // Refresh function
+  // Refresh function (keep original logic, add archive fetch)
   const handleRefresh = async () => {
     try {
       await refreshWatchlistFromBackend();
@@ -1278,6 +1323,29 @@ export default function Live_Alerts_US() {
           
           const watchlistSymbols = watchlist.map(item => item.base_symbol);
           
+          // Fetch archive alerts
+          const archivedAlertsData = await fetchArchivedAlerts();
+          
+          const watchlistArchived = archivedAlertsData.filter(alert => 
+            watchlistSymbols.includes(alert.stock)
+          );
+          
+          const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
+            const date = alert.date;
+            if (!groups[date]) {
+              groups[date] = [];
+            }
+            groups[date].push(alert);
+            return groups;
+          }, {});
+          
+          const archivedArray = Object.entries(groupedArchived)
+            .map(([date, alerts]) => ({ date, alerts }))
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          
+          setArchivedAlerts(archivedArray);
+          
+          // Handle live alerts
           if (usStrategies.includes("Momentum Riders (52-week High/Low, All-Time High/Low)")) {
             console.log("Refreshing Momentum alerts...");
             const momentumAlertsData = await fetchMomentumAlerts();
@@ -1291,24 +1359,8 @@ export default function Live_Alerts_US() {
             );
             
             const latestAlerts = sortedAlerts.slice(0, 10);
-            const remainingAlerts = sortedAlerts.slice(10);
-            
-            const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-              const date = alert.date;
-              if (!groups[date]) {
-                groups[date] = [];
-              }
-              groups[date].push(alert);
-              return groups;
-            }, {});
-            
-            const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-              .map(([date, alerts]) => ({ date, alerts }))
-              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             
             setAlertsData(latestAlerts);
-            setArchivedAlerts(archivedAlertsArray);
-            alert(`Refreshed! Found ${watchlistOnlyAlerts.length} alerts for your watchlist, showing latest 10`);
           } else {
             const filteredAlerts = hardcodedAlerts.filter(alert => 
               usStrategies.includes(alert.type)
@@ -1323,26 +1375,11 @@ export default function Live_Alerts_US() {
             );
             
             const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
-            const remainingAlerts = watchlistOnlyAlerts.slice(10);
-            
-            const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-              const date = alert.date;
-              if (!groups[date]) {
-                groups[date] = [];
-              }
-              groups[date].push(alert);
-              return groups;
-            }, {});
-            
-            const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-              .map(([date, alerts]) => ({ date, alerts }))
-              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             
             setAlertsData(latestAlerts);
-            setArchivedAlerts(archivedAlertsArray);
-            alert(`Refreshed! Found ${watchlistOnlyAlerts.length} alerts for your watchlist, showing latest 10`);
           }
           
+          alert(`Refreshed! Found ${watchlistArchived.length} archived alerts for your watchlist`);
           return;
         }
       }
@@ -1355,6 +1392,29 @@ export default function Live_Alerts_US() {
         
         const watchlistSymbols = watchlist.map(item => item.base_symbol);
         
+        // Fetch archive alerts
+        const archivedAlertsData = await fetchArchivedAlerts();
+        
+        const watchlistArchived = archivedAlertsData.filter(alert => 
+          watchlistSymbols.includes(alert.stock)
+        );
+        
+        const groupedArchived = watchlistArchived.reduce((groups: any, alert) => {
+          const date = alert.date;
+          if (!groups[date]) {
+            groups[date] = [];
+          }
+          groups[date].push(alert);
+          return groups;
+        }, {});
+        
+        const archivedArray = Object.entries(groupedArchived)
+          .map(([date, alerts]) => ({ date, alerts }))
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        setArchivedAlerts(archivedArray);
+        
+        // Handle live alerts
         if (parsed.includes("Momentum Riders (52-week High/Low, All-Time High/Low)")) {
           console.log("Refreshing Momentum alerts from localStorage...");
           const momentumAlertsData = await fetchMomentumAlerts();
@@ -1368,24 +1428,8 @@ export default function Live_Alerts_US() {
           );
           
           const latestAlerts = sortedAlerts.slice(0, 10);
-          const remainingAlerts = sortedAlerts.slice(10);
-          
-          const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-            const date = alert.date;
-            if (!groups[date]) {
-              groups[date] = [];
-            }
-            groups[date].push(alert);
-            return groups;
-          }, {});
-          
-          const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-            .map(([date, alerts]) => ({ date, alerts }))
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
           
           setAlertsData(latestAlerts);
-          setArchivedAlerts(archivedAlertsArray);
-          alert(`Refreshed! Found ${watchlistOnlyAlerts.length} alerts for your watchlist, showing latest 10`);
         } else {
           const filteredAlerts = hardcodedAlerts.filter(alert => 
             parsed.includes(alert.type)
@@ -1400,25 +1444,11 @@ export default function Live_Alerts_US() {
           );
           
           const latestAlerts = watchlistOnlyAlerts.slice(0, 10);
-          const remainingAlerts = watchlistOnlyAlerts.slice(10);
-          
-          const groupedArchivedAlerts = remainingAlerts.reduce((groups: any, alert) => {
-            const date = alert.date;
-            if (!groups[date]) {
-              groups[date] = [];
-            }
-            groups[date].push(alert);
-            return groups;
-          }, {});
-          
-          const archivedAlertsArray = Object.entries(groupedArchivedAlerts)
-            .map(([date, alerts]) => ({ date, alerts }))
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
           
           setAlertsData(latestAlerts);
-          setArchivedAlerts(archivedAlertsArray);
-          alert(`Refreshed! Found ${watchlistOnlyAlerts.length} alerts for your watchlist, showing latest 10`);
         }
+        
+        alert(`Refreshed! Found ${watchlistArchived.length} archived alerts for your watchlist`);
       } else {
         alert("No US preferences found");
       }
@@ -1778,7 +1808,7 @@ export default function Live_Alerts_US() {
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                       type="text"
-                      placeholder="Search"
+                      placeholder="Search Company / Symbol..."
                       value={archiveSearchQuery}
                       onChange={(e) => setArchiveSearchQuery(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-10 pr-8 py-2 focus:border-cyan-500 focus:outline-none text-sm"
@@ -1867,7 +1897,7 @@ export default function Live_Alerts_US() {
                   <div className="w-16 h-16 mx-auto mb-4 bg-slate-800/50 rounded-full flex items-center justify-center">
                     <Star className="w-8 h-8 text-slate-500" />
                   </div>
-                  <p className="text-slate-400 mb-2">No stocks in watchlist</p>
+                  <p className="text-slate-400 mb-2">No alerts for your watchlist</p>
                   <p className="text-sm text-slate-500">
                     Create watchlist to get personalised alerts
                   </p>
@@ -1877,10 +1907,7 @@ export default function Live_Alerts_US() {
                   <div className="w-16 h-16 mx-auto mb-4 bg-slate-800/50 rounded-full flex items-center justify-center">
                     <Target className="w-8 h-8 text-slate-500" />
                   </div>
-                  <p className="text-slate-400 mb-2">No stocks in watchlist</p>
-                  <p className="text-sm text-slate-500">
-                    Create watchlist to get personalised alerts
-                  </p>
+                  <p className="text-slate-400 mb-2">No alerts for your watchlist</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -1995,16 +2022,27 @@ export default function Live_Alerts_US() {
                 <span className="text-xs text-slate-500">{watchlist.length}/20</span>
               </div>
               
-              {/* Search Bar for Watchlist */}
+              {/* Search Bar for Watchlist - Now opens modal when clicked */}
               <div className="mb-4">
-                <div className="relative">
+                <div className="relative cursor-pointer" onClick={() => setShowStockList(true)}>
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type="text"
-                    placeholder="Search"
+                    placeholder="Search Company / Symbol..."
                     value={searchAlertQuery}
-                    onChange={(e) => setSearchAlertQuery(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-10 pr-3 py-2 focus:border-cyan-500 focus:outline-none"
+                    onChange={(e) => {
+                      setSearchAlertQuery(e.target.value);
+                      // If user types at least 2 characters, open the modal with search
+                      if (e.target.value.length >= 2) {
+                        setShowStockList(true);
+                        setSearchQuery(e.target.value);
+                      }
+                    }}
+                    onFocus={() => {
+                      // Optional: open modal on focus if you want
+                      // setShowStockList(true);
+                    }}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-10 pr-3 py-2 focus:border-cyan-500 focus:outline-none cursor-pointer"
                   />
                 </div>
               </div>
@@ -2047,10 +2085,8 @@ export default function Live_Alerts_US() {
                         >
                           <div className="flex-1 min-w-0">
                             
-                            
+                            </div>
                           </div>
-                          
-                        </div>
                       );
                     })
                 )}
