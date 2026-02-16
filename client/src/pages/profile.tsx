@@ -37,7 +37,7 @@ const ALL_STRATEGIES = [
   "Momentum Riders (52-week High/Low, All-Time High/Low)",
   "Cycle Count Reversal",
   "Mean Reversion", 
-  "Double Top - Double Bottom (Contrabets)",
+  "Swing Trade",
   "Topping Candle - Bottoming Candle (Contrabets)",
   "Pattern Formation",
   "Fundamental Picks (Earnings Season focused)"
