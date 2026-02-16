@@ -2007,7 +2007,7 @@ const fetchArchivedAlerts = async () => {
                           </div>
 
                           <div className="mt-4 pt-4 border-t border-slate-700 text-xs text-slate-500">
-                            <p>{alert.time} • Forwarded from Finyersems • Auto-refreshing every 30 seconds</p>
+                            
                           </div>
                         </div>
                       )}
@@ -2385,7 +2385,7 @@ const fetchArchivedAlerts = async () => {
                       </div>
 
                       <div className="mt-4 pt-4 border-t border-slate-700 text-xs text-slate-500">
-                        <p>{alert.time} • Forwarded from Finyersems</p>
+                        
                       </div>
                     </div>
                   </div>
